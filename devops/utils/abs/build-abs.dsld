@@ -1,0 +1,54 @@
+pipeline {
+    agent {
+        label "${params.jenkins_slave}"
+    }
+
+    parameters {
+        string(name: 'abs_branch', defaultValue: 'v3', description: 'The aerospike-backup-service branch you want to create the image from')
+        string(name: 'image_tag', defaultValue: 'tests', description: 'Image tag for the ABS image')
+        booleanParam(name: 'tag_latest', defaultValue: false, description: 'Tags the image also as latest')
+        choice(name: 'jenkins_slave', description: 'The slave that the job will run on', choices: ['AllSlaves', 'Slave1', 'Slave2', 'Slave3'])
+    }
+
+    options {
+        timeout(time: 90, unit: 'MINUTES')
+    }
+
+    stages {
+        stage('Fetch Credentials from AWS Secrets Manager') {
+            steps {
+                script {
+                    env.DOCKER_USERNAME = sh(
+                            script: """aws secretsmanager get-secret-value --secret-id adr/jfrog/testenv/creds --output json | jq -r '.SecretString' | awk -F',' '{print \$1}' | awk -F':' '{print \$2}'""",
+                            returnStdout: true
+                    ).trim()
+
+                    env.DOCKER_PASSWORD = sh(
+                            script: """aws secretsmanager get-secret-value --secret-id adr/jfrog/testenv/creds --output json | jq -r '.SecretString' | awk -F',' '{print \$2}' | awk -F':' '{print \$2}'""",
+                            returnStdout: true
+                    ).trim()
+                }
+            }
+        }
+
+        stage('Create ABS Image') {
+            steps {
+                script {
+                    sh "docker run --rm --privileged multiarch/qemu-user-static --reset -p yes"
+                    sh "docker buildx rm builder || true"
+                    sh "rm -rf aerospike-backup-service"
+                    sh "git clone https://github.com/aerospike/aerospike-backup-service.git"
+                    dir(pwd() + "/aerospike-backup-service") {
+                        sh "git checkout ${abs_branch}"
+                        // Remove the last character from DOCKER_PASSWORD before building the image
+                        env.DOCKER_PASSWORD = sh(
+                                script: 'echo "${DOCKER_PASSWORD}" | sed \'s/.$//\'',
+                                returnStdout: true
+                        ).trim()
+                        sh "DOCKER_USERNAME=\"${DOCKER_USERNAME}\" DOCKER_PASSWORD=\"${DOCKER_PASSWORD}\" LATEST=${tag_latest} TAG=${image_tag} make docker-buildx"
+                    }
+                }
+            }
+        }
+    }
+}

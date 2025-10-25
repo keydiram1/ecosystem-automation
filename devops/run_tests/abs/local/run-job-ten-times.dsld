@@ -1,0 +1,97 @@
+def absBranch = [string(name: 'abs_branch', value: params.'abs_branch')]
+def installationSource = [string(name: 'abs_version', value: params.'abs_version'),
+                          booleanParam(name: 'pull_from_jfrog', value: params.'pull_from_jfrog')]
+
+pipeline {
+    agent none
+
+    parameters {
+
+        string(name: 'job_name', defaultValue: 'test-abs-local', description: 'The name of the job you want to run 10 times')
+        string(name: 'automation_branch', defaultValue: 'master', description: 'The Automation branch with the tests you want to run')
+        string(name: 'abs_branch', defaultValue: 'v3', description: 'The ABS branch you want to install from')
+
+        booleanParam(name: 'pull_from_jfrog', defaultValue: false)
+        string(name: 'abs_version', defaultValue: 'tests', description: 'Replace the tag of the Jfrog-ABS images')
+    }
+
+    options {
+        timeout(time: 120, unit: 'MINUTES')
+    }
+
+    environment {
+        GITHUB_TOKEN = credentials('GITHUB_TOKEN')
+    }
+
+    stages {
+        stage('Get Parameters') {
+            steps {
+                build job: "${job_name}", wait: false, propagate: true
+                sleep 10
+            }
+        }
+        stage('Run job 10 times') {
+            parallel {
+                stage('Run 1') {
+                    steps {
+                        build job: "${job_name}/${automation_branch}", parameters: absBranch + installationSource, propagate: true
+                    }
+                }
+                stage('Run 2') {
+                    steps {
+                        sleep 20
+                        build job: "${job_name}/${automation_branch}", parameters: absBranch + installationSource, propagate: true
+                    }
+                }
+                stage('Run 3') {
+                    steps {
+                        sleep 30
+                        build job: "${job_name}/${automation_branch}", parameters: absBranch + installationSource, propagate: true
+                    }
+                }
+                stage('Run 4') {
+                    steps {
+                        sleep 40
+                        build job: "${job_name}/${automation_branch}", parameters: absBranch + installationSource, propagate: true
+                    }
+                }
+                stage('Run 5') {
+                    steps {
+                        sleep 50
+                        build job: "${job_name}/${automation_branch}", parameters: absBranch + installationSource, propagate: true
+                    }
+                }
+                stage('Run 6') {
+                    steps {
+                        sleep 60
+                        build job: "${job_name}/${automation_branch}", parameters: absBranch + installationSource, propagate: true
+                    }
+                }
+                stage('Run 7') {
+                    steps {
+                        sleep 70
+                        build job: "${job_name}/${automation_branch}", parameters: absBranch + installationSource, propagate: true
+                    }
+                }
+                stage('Run 8') {
+                    steps {
+                        sleep 80
+                        build job: "${job_name}/${automation_branch}", parameters: absBranch + installationSource, propagate: true
+                    }
+                }
+                stage('Run 9') {
+                    steps {
+                        sleep 90
+                        build job: "${job_name}/${automation_branch}", parameters: absBranch + installationSource, propagate: true
+                    }
+                }
+                stage('Run 10') {
+                    steps {
+                        sleep 100
+                        build job: "${job_name}/${automation_branch}", parameters: absBranch + installationSource, propagate: true
+                    }
+                }
+            }
+        }
+    }
+}

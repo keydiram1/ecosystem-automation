@@ -1,0 +1,64 @@
+aerospike-clusters:
+  absDefaultCluster:
+    seed-nodes:
+      - host-name: "host.docker.internal"
+        port: 3000
+    credentials:
+      user: "tester"
+      password: "psw"
+    max-parallel-scans: 20
+  absSecondCluster:
+    seed-nodes:
+      - host-name: "host.docker.internal"
+        port: 3003
+    credentials:
+      user: "tester"
+      password: "psw"
+    max-parallel-scans: 20
+
+storage:
+  local:
+    local-storage:
+      path: /data
+
+backup-policies:
+  defaultPolicy:
+    parallel: 8
+
+backup-routines:
+  fullBackup1:
+    interval-cron: "0 0 * * * *"
+    source-cluster: absDefaultCluster
+    storage: local
+    namespaces: [ "source-ns11" ]
+    backup-policy: defaultPolicy
+  fullBackup2:
+    interval-cron: "0 0 * * * *"
+    source-cluster: absDefaultCluster
+    storage: local
+    namespaces: [ "source-ns12" ]
+    backup-policy: defaultPolicy
+  fullBackup3:
+    interval-cron: "0 0 * * * *"
+    source-cluster: absDefaultCluster
+    storage: local
+    namespaces: [ "source-ns13" ]
+    backup-policy: defaultPolicy
+  fullBackup4:
+    interval-cron: "0 0 * * * *"
+    source-cluster: absSecondCluster
+    storage: local
+    namespaces: [ "source-ns14" ]
+    backup-policy: defaultPolicy
+  fullBackup5:
+    interval-cron: "0 0 * * * *"
+    source-cluster: absSecondCluster
+    storage: local
+    namespaces: [ "source-ns15" ]
+    backup-policy: defaultPolicy
+  fullBackup6:
+    interval-cron: "0 0 * * * *"
+    source-cluster: absSecondCluster
+    storage: local
+    namespaces: [ "source-ns16" ]
+    backup-policy: defaultPolicy

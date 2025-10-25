@@ -1,0 +1,37 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'IMAGE_TAGS', description: 'Enter the image tag. Several tags should be separated by comma', defaultValue: 'test-tag1')
+    }
+
+    environment {
+        ARTIFACTORY_URL = 'https://aerospike.jfrog.io/artifactory'
+        REPO_KEY = 'ecosystem-container-dev-local'
+        COMMON_PREFIX = 'aerospike-adr'
+        DOCKER_PASSWORD = credentials('DOCKER_PASSWORD')
+    }
+
+    options {
+        timeout(time: 10, unit: 'MINUTES')
+    }
+
+    stages {
+        stage('Delete Images') {
+            steps {
+                script {
+                    def IMAGES = ['xdr-transformer', 'rest-backend', 'storage-provider', 'xdr-scheduler', 'smd-handler', 'queue-handler', 'compactor', 'authenticator']
+                    def imageTags = params.IMAGE_TAGS.split(',')
+
+                    for (IMAGE_NAME in IMAGES) {
+                        for (IMAGE_TAG in imageTags) {
+                            def FULL_IMAGE_NAME = "${COMMON_PREFIX}-${IMAGE_NAME}/${IMAGE_TAG}"
+                            def DELETE_URL = "${ARTIFACTORY_URL}/${REPO_KEY}/${FULL_IMAGE_NAME}"
+                            sh "curl -X DELETE \"${DELETE_URL}\" -u eram@aerospike.com:${DOCKER_PASSWORD}"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

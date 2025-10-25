@@ -1,0 +1,58 @@
+- name: Install Maven
+  block:
+    - name: Get Maven latest version
+      set_fact:
+        maven_latest_version: "{{ lookup('ansible.builtin.url', 'https://downloads.apache.org/maven/maven-3/', split_lines=False) | safe | regex_findall('.*(\\d+\\.\\d+\\.\\d+).*') | list | sort | reverse | first }}"
+
+    - name: Download Maven .tar.gz package
+      get_url:
+        url: "https://dlcdn.apache.org/maven/maven-3/{{ maven_latest_version }}/binaries/apache-maven-{{ maven_latest_version }}-bin.tar.gz"
+        dest: "/tmp/apache-maven-{{ maven_latest_version }}-bin.tar.gz"
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Create Maven installation directory
+      file:
+        path: /opt/maven
+        state: directory
+        mode: '0755'
+
+    - name: Extract Maven .tar.gz package
+      unarchive:
+        src: "/tmp/apache-maven-{{ maven_latest_version }}-bin.tar.gz"
+        dest: /opt/maven
+        remote_src: yes
+
+    - name: Copy contents of Apache Maven directory to new path
+      synchronize:
+        src: "/opt/maven/apache-maven-{{ maven_latest_version }}/"
+        dest: "/opt/maven/apache-maven-latest/"
+        recursive: yes
+        mode: push
+      delegate_to: "{{ inventory_hostname }}"
+
+    - name: Remove old Apache Maven directory
+      file:
+        path: "/opt/maven/apache-maven-{{ maven_latest_version }}"
+        state: absent
+
+    - name: Remove Maven .tar.gz package
+      file:
+        path: "/tmp/apache-maven-{{ maven_latest_version }}-bin.tar.gz"
+        state: absent
+
+    - name: Update environment variables
+      lineinfile:
+        path: /etc/profile.d/maven.sh
+        create: yes
+        line: "export {{ item }}"
+      loop:
+        - 'M2_HOME=/opt/maven/apache-maven-latest'
+        - 'MAVEN_HOME=/opt/maven/apache-maven-latest'
+        - 'PATH=${M2_HOME}/bin:${PATH}'
+
+    - name: Make Maven environment script executable
+      file:
+        path: /etc/profile.d/maven.sh
+        mode: '0755'

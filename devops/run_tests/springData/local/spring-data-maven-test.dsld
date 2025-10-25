@@ -1,0 +1,46 @@
+def springDataScriptPath = "/devops/run_tests/springData/SpringDatraScript.groovy"
+def springDataScript
+
+pipeline {
+
+    agent {
+        label "${params.jenkins_slave}"
+    }
+    parameters {
+        booleanParam(name: 'clone_and_checkout_spring_data', defaultValue: true)
+        string(name: 'spring_data_branch', defaultValue: 'main', description: 'The Spring Data Aerospike branch you want to install from')
+        choice(name: 'jenkins_slave', description: 'The slave that the job will run on', choices: ['AllSlaves', 'Slave1', 'Slave2', 'Slave3'])
+    }
+    options {
+        timeout(time: 1, unit: 'HOURS')
+        buildDiscarder(logRotator(numToKeepStr: '10', daysToKeepStr: '30'))
+    }
+
+    environment {
+        GITHUB_TOKEN = credentials('GITHUB_TOKEN')
+    }
+
+    stages {
+        stage('Clone and checkout Spring Data') {
+            when {
+                expression { return params.clone_and_checkout_spring_data }
+            }
+            steps {
+                script {
+                    springDataScript = load pwd() + springDataScriptPath
+                    springDataScript.cloneAndCheckoutSpringData()
+                }
+            }
+        }
+
+        stage('Run mvn test in the Spring Data project') {
+            steps {
+                script {
+                    dir("/opt/automation/spring-data-aerospike") {
+                        sh 'mvn clean test -B -U'
+                    }
+                }
+            }
+        }
+    }
+}

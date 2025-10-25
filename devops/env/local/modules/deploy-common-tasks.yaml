@@ -1,0 +1,44 @@
+- name: "Set KinD Context"
+  command: kubectl config use-context "{{ kind.cluster_context }}"
+  register: kubectl_result
+  ignore_errors: yes
+
+- name: "Export kubeconfig if context switch fails"
+  command: kind export kubeconfig --name "{{ kind.cluster_name }}"
+  when: kubectl_result.failed
+
+- name: "Get Docker Username"
+  google.cloud.gcp_secret_manager:
+    name: "docker-username"
+    state: present
+    project: "{{ gcp.project_id }}"
+    auth_kind: "application"
+  register: username_result
+
+- name: "Get Docker Password"
+  google.cloud.gcp_secret_manager:
+    name: "docker-password"
+    state: present
+    project: "{{ gcp.project_id }}"
+    auth_kind: "application"
+  register: password_result
+
+- name: "Create Kubernetes Secret for Docker Registry"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: regcred
+        namespace: aerospike
+      type: kubernetes.io/dockerconfigjson
+      data:
+        .dockerconfigjson: "{{ {
+        'auths': {
+            'aerospike.jfrog.io': {
+                'username': username_result.value,
+                'password': password_result.value
+            }
+        }
+    } | to_json | b64encode }}"

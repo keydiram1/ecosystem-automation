@@ -1,0 +1,10 @@
+- name: Render Values YAML For Aerospike Backup Service
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - name: Render Aerospike Backup Service Values Jinja2 template to YAML file
+      template:
+        src: "{{ playbook_dir }}/assets/aerospike-backup-service-values.yml.j2"
+        dest: "{{ playbook_dir }}/assets/aerospike-backup-service-values.yml"
+        mode: '0644'

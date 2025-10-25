@@ -1,0 +1,57 @@
+- name: Install system-wide Python virtualenv
+  block:
+    - name: Extract latest Python version
+      set_fact:
+        latest_python_version: "{{ lookup('ansible.builtin.url', 'https://www.python.org/api/v2/downloads/release/', split_lines=False) | 
+          from_json | 
+          selectattr('version', 'equalto', 3) | 
+          selectattr('is_latest', 'equalto', true) | 
+          list | first | json_query('name') | regex_replace('Python ', '') }}"
+
+    - name: Add the official Python repository
+      apt_repository:
+        repo: ppa:deadsnakes/ppa
+        state: present
+
+    - name: Install required Python packages
+      apt:
+        update_cache: yes
+        name:
+          - python3
+          - python3-dev
+          - python3-venv
+          - python3-pip
+        state: latest
+
+    - name: Create a system-wide virtual environment
+      command:
+        cmd: python3 -m venv /opt/python_venv
+        creates: /opt/python_venv
+
+    - name: Set correct permissions and ownership for virtual environment
+      file:
+        path: /opt/python_venv
+        owner: root
+        group: ubuntu-jenkins-group
+        mode: '0750'
+        recurse: true
+
+    - name: Install Python packages in the virtual environment
+      pip:
+        name:
+          - pyyaml
+          - google-cloud-storage
+          - bs4
+          - google-auth
+          - ansible
+          - numpy
+          - kubernetes
+        virtualenv: /opt/python_venv
+
+    - name: Ensure virtualenv path is set system-wide
+      copy:
+        dest: /etc/profile.d/python_venv.sh
+        content: 'export PATH="/opt/python_venv/bin:$PATH"'
+        owner: root
+        group: root
+        mode: '0755'

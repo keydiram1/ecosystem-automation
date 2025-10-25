@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "aerospike-backup-service"
+  namespace: "aerospike"
+  labels:
+    app: "aerospike-backup-service"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "aerospike-backup-service"
+  template:
+    metadata:
+      labels:
+        app: "aerospike-backup-service"
+    spec:
+      containers:
+        - name: "aerospike-backup-service"
+          image: "aerospike.jfrog.io/ecosystem-container-dev-local/aerospike-backup-service:latest"
+          command: ["/app/backup"]
+          args:
+            - "--name backup-service"
+            - "--config /config/backup-config.yaml"
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: backup-config
+              mountPath: /config/backup-config.yaml
+              subPath: backup-config.yaml
+              readOnly: true
+            - name: psw
+              mountPath: /config/psw.txt
+              subPath: psw.txt
+              readOnly: true
+            - name: creds
+              mountPath: /root/.aws/credentials
+              subPath: credentials
+              readOnly: true
+          livenessProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            httpGet:
+              path: /health
+              port: 8080
+          readinessProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            httpGet:
+              path: /health
+              port: 8080
+      imagePullSecrets:
+        - name: "regcred"
+      volumes:
+        - name: backup-config
+          configMap:
+            name: aerospike-backup-service-cm
+            optional: true
+        - name: creds
+          secret:
+            secretName: creds-cm
+            optional: true
+        - name: psw
+          secret:
+            secretName: psw-cm
+            optional: true
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: "kubernetes.io/hostname"
+              labelSelector:
+                matchExpressions:
+                  - key: "app.kubernetes.io/name"
+                    operator: In
+                    values:
+                      - "aerospike-backup-service"

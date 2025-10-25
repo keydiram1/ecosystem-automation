@@ -1,0 +1,65 @@
+- name: Get service facts
+  service_facts:
+
+- name: Get variables
+  include_vars: vars/prometheus-exporter-vars.yml
+
+- block:
+  - name: If Ubuntu, update package cache
+    shell: |
+      sudo apt update
+  when: operating_system == ubuntu_os
+      
+- block:    
+  - name: Install git/go
+  # Use Go 1.13. Higher versions of Go require use of Subject Alterative Name in certificates
+    package:
+      name:
+        - python2
+        - "{{ os_config['go_package_name'] }}"
+        - git
+      state: present
+
+  - name: Download Aerospike Tools if not already downloaded
+    get_url:
+      url: "{{ prometheus_exporter_download_url }}"
+      dest: "{{ prometheus_exporter_download_path }}"
+
+  - name: "Install Prometheus Exporter"
+    become: yes
+    shell: |
+      set -e
+      cd {{ prometheus_exporter_download_file_dir }}
+      tar xvfz {{ prometheus_exporter_file_name }}
+      # install exporter binary
+      cp ./usr/bin/aerospike-prometheus-exporter /usr/bin/aerospike-prometheus-exporter
+      
+      # Install configuration file
+      mkdir -p /etc/aerospike-prometheus-exporter
+      sed -i 's/^db_host.*$/db_host="localhost"/' ./etc/aerospike-prometheus-exporter/ape.toml
+      sed -i 's|^log_file\s*=.*$|log_file="/var/log/aerospike/{{ exporter_name }}.log"|' ./etc/aerospike-prometheus-exporter/ape.toml 
+      sed -i 's|^log_level\s*=.*$|log_level="info"|' ./etc/aerospike-prometheus-exporter/ape.toml 
+      sed -i "s/^labels.*$/labels={cluster_batch_tag='{{ cluster_batch_tag }}'}/" ./etc/aerospike-prometheus-exporter/ape.toml  
+      if [ "{{ tls_enabled }}" == "True" ]
+      then
+      # Use the pipe separator for sed to avoid difficulties with / characters in paths
+        sed -i 's|^root_ca=.*$|root_ca="{{ certificates_directory }}/ca.crt"|' ./etc/aerospike-prometheus-exporter/ape.toml  
+        sed -i 's|^cert_file=.*$|cert_file="{{ certificates_directory }}/server.crt"|' ./etc/aerospike-prometheus-exporter/ape.toml  
+        sed -i 's|^key_file=.*$|key_file="{{ private_key_directory }}/server.key"|' ./etc/aerospike-prometheus-exporter/ape.toml  
+        sed -i 's|^db_port=.*$|db_port={{ tls_service_port }}|' ./etc/aerospike-prometheus-exporter/ape.toml  
+        sed -i 's|^node_tls_name=.*$|node_tls_name="{{ tls_name }}"|' ./etc/aerospike-prometheus-exporter/ape.toml  
+      fi      
+      cp ./etc/aerospike-prometheus-exporter/ape.toml /etc/aerospike-prometheus-exporter/ape.toml
+      
+      # Install systemd service unit file
+      mkdir -p /usr/lib/systemd/system
+      cp ./usr/lib/systemd/system/aerospike-prometheus-exporter.service /usr/lib/systemd/system/aerospike-prometheus-exporter.service
+      
+      # Reload systemd manager configuration
+      systemctl daemon-reload
+  when: hostvars[inventory_hostname].services[exporter_service_name] is not defined
+
+- name: "Start {{ exporter_name }}, if not started"
+  service:
+    name: "{{ exporter_name}}"
+    state: restarted

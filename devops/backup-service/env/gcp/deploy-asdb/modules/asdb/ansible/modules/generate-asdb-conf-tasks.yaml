@@ -1,0 +1,12 @@
+- name: "Generate Configuration"
+  template:
+    src: "{{ playbook_dir }}/assets/aerospike.yaml.j2"
+    dest: "{{ playbook_dir }}/assets/aerospike.yaml"
+    mode: "0644"
+
+
+- name: "Convert ASDB Configuration aerospike.yaml to aerospike.conf"
+  shell:
+    cmd: "asconfig convert --aerospike-version {{ version }} aerospike.yaml --output aerospike.conf"
+    chdir: "{{ playbook_dir }}/assets"
+  ignore_errors: yes

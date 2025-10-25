@@ -1,0 +1,83 @@
+---
+# Change the configuration for your use case.
+#
+# Refer to https://www.aerospike.com/docs/connectors/enterprise/xdr-proxy/configuration/index.html
+# for details.
+# The connector's listening ports, manage service, TLS and network interface.
+service:
+  tls:
+    port: 8082
+    ciphers:
+      - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+      - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+      - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+      - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+      - TLS_RSA_WITH_AES_256_GCM_SHA384
+      - TLS_RSA_WITH_AES_128_GCM_SHA256
+    # Trust store file should be the source cluster's truststore
+    trust-store:
+      store-file: /adr/conf/tls/etc/pki/certs/source/source.ca.jks
+      store-password-file: /adr/conf/tls/source/source-cluster-tls-password-file.txt
+      store-type: JKS
+    key-store:
+      store-file: /adr/conf/tls/etc/pki/private/xdrproxy/xdr.proxy.client.chain.p12
+      store-password-file: /adr/conf/tls/xdrproxy/xdr-proxy-tls-password-file.txt
+      key-password-file: /adr/conf/tls/xdrproxy/xdr-proxy-tls-password-file.txt
+      store-type: PKCS12
+  manage:
+    tls:
+      port: 8902
+      ciphers:
+        - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+        - TLS_RSA_WITH_AES_256_GCM_SHA384
+        - TLS_RSA_WITH_AES_128_GCM_SHA256
+      trust-store:
+        store-file: /adr/conf/tls/etc/pki/certs/source/source.ca.jks
+        store-password-file: /adr/conf/tls/source/source-cluster-tls-password-file.txt
+        store-type: JKS
+      key-store:
+        store-file: /adr/conf/tls/etc/pki/private/xdrproxy/xdr.proxy.client.chain.p12
+        store-password-file: /adr/conf/tls/xdrproxy/xdr-proxy-tls-password-file.txt
+        key-password-file: /adr/conf/tls/xdrproxy/xdr-proxy-tls-password-file.txt
+        store-type: PKCS12
+
+# The destination (backup) aerospike cluster.
+aerospike:
+  seeds:
+   - host.docker.internal:
+        port: 3004
+        tls-name: backup.server
+  credentials:
+    username: tester
+    password-file: /opt/aerospike-xdr-proxy/pwd.txt
+  tls:
+    ciphers:
+      - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+      - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+      - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+      - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+      - TLS_RSA_WITH_AES_256_GCM_SHA384
+      - TLS_RSA_WITH_AES_128_GCM_SHA256
+    trust-store:
+      store-file: /adr/conf/tls/etc/pki/certs/backup/backup.ca.jks
+      store-password-file: /adr/conf/tls/backup/backup-cluster-tls-password-file.txt
+      store-type: JKS
+    key-store:
+      store-file: /adr/conf/tls/etc/pki/private/backup/backup.client.chain.p12
+      store-password-file: /adr/conf/tls/backup/backup-cluster-tls-password-file.txt
+      key-password-file: /adr/conf/tls/backup/backup-cluster-tls-password-file.txt
+      store-type: PKCS12
+
+# The logging config
+logging:
+  enable-console-logging: true
+  file: /var/log/aerospike-xdr-proxy/aerospike-xdr-proxy.log
+  # Ticker log interval in seconds
+  ticker-interval: 1
+
+# Message Transformer
+message-transformer:
+  class: com.aerospike.adr.transformer.RecordTransformer

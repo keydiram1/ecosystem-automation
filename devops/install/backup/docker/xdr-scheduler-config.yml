@@ -1,0 +1,10 @@
+---
+backendUri: 'http://rest-backend:8080'
+xdrSchedulerIntervalMs: 1000
+xdrSchedulerCheckLagIntervalMs: 1000
+authenticatorUri: 'http://authenticator:8087'
+auth:
+  enabled: true
+  tokenRefreshSeconds: 82800
+  username: "adr-xdr-scheduler"
+  password: "adr-xdr-scheduler-pwd"

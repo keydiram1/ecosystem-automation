@@ -1,0 +1,44 @@
+- name: "Install Aerospike Backup Service"
+  hosts: localhost
+  connection: local
+
+  vars_files:
+    - "../vars/vars.yaml"
+
+  tasks:
+    - name: "Run Common Tasks"
+      import_tasks: "modules/deploy-common-tasks.yaml"
+      vars:
+        is_jenkins: "{{ is_jenkins }}"
+
+    - name: "Generate values.yaml Configuration"
+      template:
+        src: "../assets/values.yaml.j2"
+        dest: "../assets/values.yaml"
+        mode: "0644"
+
+    - name: "Add Aerospike Helm repository"
+      kubernetes.core.helm_repository:
+        name: aerospike
+        repo_url: "https://aerospike.github.io/helm-charts"
+
+    - name: "Get Helm chart latest version"
+      shell: |
+        helm repo update >/dev/null 2>&1 && helm search repo aerospike/aerospike-backup-service --versions | awk 'NR==2 {printf "%s", $2}'
+      register: helm_chart_version
+
+    - name: Debug latest Helm chart version
+      debug:
+        msg: "Latest aerospike-backup-service Helm chart version: {{ helm_chart_version.stdout }}"
+
+    - name: "Install Helm chart for ABS"
+      kubernetes.core.helm:
+        name: abs
+        chart_ref: aerospike-backup-service
+        chart_repo_url: "https://aerospike.github.io/helm-charts"
+        release_namespace: aerospike
+        create_namespace: yes
+        wait: yes
+        chart_version: "{{ helm_chart_version.stdout }}"
+        update_repo_cache: true
+        values: "{{ lookup('file', '../assets/values.yaml') | from_yaml }}"

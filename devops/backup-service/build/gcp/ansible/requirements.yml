@@ -1,0 +1,6 @@
+# ansible-galaxy collection install -r requirements.yml
+---
+collections:
+  - name: google.cloud
+    version: 1.3.0
+

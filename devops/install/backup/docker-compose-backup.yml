@@ -1,0 +1,140 @@
+version: '3.9'
+
+services:
+  compactor:
+    image: ${ADR_IMAGE_NAME_PREFIX}aerospike-adr-compactor:${BACKUP_IMAGES_VERSION}
+    container_name: adr-compactor
+    depends_on:
+      rest-backend:
+        condition: service_healthy
+      storage-provider:
+        condition: service_healthy
+      authenticator:
+        condition: service_healthy
+    networks:
+      adr-network:
+        aliases:
+          - compactor
+
+  queue-handler:
+    image: ${ADR_IMAGE_NAME_PREFIX}aerospike-adr-queue-handler:${BACKUP_IMAGES_VERSION}
+    container_name: adr-queue-handler
+    depends_on:
+      rest-backend:
+        condition: service_healthy
+      storage-provider:
+        condition: service_healthy
+      authenticator:
+        condition: service_healthy
+    networks:
+      adr-network:
+        aliases:
+          - queue-handler
+
+  rest-backend:
+    image: ${ADR_IMAGE_NAME_PREFIX}aerospike-adr-rest-backend:${BACKUP_IMAGES_VERSION}
+    hostname: rest-backend
+    container_name: adr-rest-backend
+    healthcheck:
+      test: "curl -f localhost:8080"
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 10s
+    networks:
+      adr-network:
+        aliases:
+          - rest-backend
+
+  smd-handler:
+    image: ${ADR_IMAGE_NAME_PREFIX}aerospike-adr-smd-handler:${BACKUP_IMAGES_VERSION}
+    container_name: adr-smd-handler
+    depends_on:
+      rest-backend:
+        condition: service_healthy
+      storage-provider:
+        condition: service_healthy
+      authenticator:
+        condition: service_healthy
+    networks:
+      adr-network:
+        aliases:
+          - smd-handler
+
+  storage-provider:
+    image: ${ADR_IMAGE_NAME_PREFIX}aerospike-adr-storage-provider:${BACKUP_IMAGES_VERSION}
+    hostname: storage-provider
+    container_name: adr-storage-provider
+    healthcheck:
+      test: "curl -f localhost:8081"
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 10s
+    depends_on:
+      rest-backend:
+        condition: service_healthy
+      authenticator:
+        condition: service_healthy
+    networks:
+      adr-network:
+        aliases:
+          - storage-provider
+
+  xdr-scheduler:
+    image: ${ADR_IMAGE_NAME_PREFIX}aerospike-adr-xdr-scheduler:${BACKUP_IMAGES_VERSION}
+    container_name: adr-xdr-scheduler
+    depends_on:
+      rest-backend:
+        condition: service_healthy
+      storage-provider:
+        condition: service_healthy
+      authenticator:
+        condition: service_healthy
+    networks:
+      adr-network:
+        aliases:
+          - xdr-scheduler
+
+  authenticator:
+    image: ${ADR_IMAGE_NAME_PREFIX}aerospike-adr-authenticator:${BACKUP_IMAGES_VERSION}
+    container_name: adr-authenticator
+    healthcheck:
+      test: "curl -f localhost:8087"
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 10s
+    depends_on:
+      rest-backend:
+        condition: service_healthy
+    networks:
+      adr-network:
+        aliases:
+          - authenticator
+
+  xdr-transformer:
+    image: ${ADR_IMAGE_NAME_PREFIX}aerospike-adr-xdr-transformer:${BACKUP_IMAGES_VERSION}
+    container_name: adr-xdr-transformer
+    networks:
+      adr-network:
+        aliases:
+          - xdr-transformer
+
+  prometheus:
+    container_name: adr-prometheus
+    image: 'prom/prometheus'
+    networks:
+      adr-network:
+        aliases:
+          - prometheus
+
+networks:
+  adr-network:
+
+volumes:
+  prometheus-data:
+
+secrets:
+  settings:
+    file: ./settings.xml

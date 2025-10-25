@@ -1,0 +1,69 @@
+pipeline {
+    agent {
+        label "${params.jenkins_slave}"
+    }
+
+    parameters {
+        booleanParam(name: 'recreate_builder', defaultValue: true)
+        booleanParam(name: 'build_image', defaultValue: false)
+
+        string(name: 'abs_branch', defaultValue: 'v3', description: 'The aerospike-backup-service branch you want to create the image from')
+        string(name: 'image_tag', defaultValue: 'tests', description: 'Image tag for the ABS image')
+        booleanParam(name: 'tag_latest', defaultValue: false, description: 'Tags the image also as latest')
+        choice(name: 'jenkins_slave', description: 'The slave that the job will run on', choices: ['AllSlaves', 'Slave1', 'Slave2', 'Slave3'])
+    }
+
+    options {
+        timeout(time: 90, unit: 'MINUTES')
+    }
+
+    environment {
+        DOCKER_PASSWORD = credentials('DOCKER_PASSWORD')
+        GITHUB_TOKEN = credentials('GITHUB_TOKEN')
+    }
+
+    stages {
+        stage('Recreate Builder') {
+            when {
+                expression { return params.recreate_builder }
+            }
+            steps {
+                script {
+                    sh "docker context use default"
+                    sh "docker buildx rm --all-inactive --force"
+                    sh "docker buildx prune --all --force"
+                    dir(pwd() + "/devops/backup-service/build/docker") {
+                        sh "task destroy-builder"
+                        sh "task create-builder"
+                    }
+                }
+            }
+        }
+
+        stage('Build Backup Service Image') {
+            when {
+                expression { return params.build_image }
+            }
+            steps {
+                script {
+                    dir(pwd() + "/devops/backup-service/build/docker") {
+                        sh "DOCKER_USERNAME=\"eram@aerospike.com\" DOCKER_PASSWORD=\"$DOCKER_PASSWORD\" LATEST=$tag_latest TAG=$image_tag BRANCH=$abs_branch task build-image"
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                dir(pwd() + "/devops/backup-service/build/docker") {
+                    sh "docker context use default"
+                    sh "docker buildx rm --all-inactive --force"
+                    sh "docker buildx prune --all --force"
+                    sh "task destroy-builder"
+                }
+            }
+        }
+    }
+}

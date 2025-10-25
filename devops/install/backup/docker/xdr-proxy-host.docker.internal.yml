@@ -1,0 +1,32 @@
+---
+# Change the configuration for your use case.
+#
+# Refer to https://www.aerospike.com/docs/connectors/enterprise/xdr-proxy/configuration/index.html
+# for details.
+# The connector's listening ports, manage service, TLS and network interface.
+service:
+  port: 8082
+  address: 0.0.0.0
+  manage:
+    address: 0.0.0.0
+    port: 8902
+
+# The destination (backup) aerospike cluster.
+aerospike:
+  seeds:
+   - host.docker.internal:
+        port: 3004
+  credentials:
+    username: tester
+    password-file: /opt/aerospike-xdr-proxy/pwd.txt
+
+# The logging config
+logging:
+  enable-console-logging: true
+  file: /var/log/aerospike-xdr-proxy/aerospike-xdr-proxy.log
+  # Ticker log interval in seconds
+  ticker-interval: 1
+
+# Message Transformer
+message-transformer:
+  class: com.aerospike.adr.transformer.RecordTransformer

@@ -1,0 +1,75 @@
+- name: "Set min_free_kbytes"
+  block:
+    - name: "Drop caches"
+      ansible.posix.sysctl:
+        name: vm.drop_caches
+        value: 3
+        state: present
+        sysctl_set: true
+        reload: yes
+
+    - name: "Configure vm.min_free_kbytes permanently"
+      ansible.posix.sysctl:
+        name: vm.min_free_kbytes
+        value: 1310720
+        state: present
+        sysctl_set: true
+        reload: yes
+
+- name: "Set swappiness to 0"
+  ansible.posix.sysctl:
+    name: vm.swappiness
+    value: 0
+    state: present
+    sysctl_set: true
+    reload: yes
+
+- name: "Set THP (Transparent Huge Pages) to never"
+  block:
+    - name: "Set thp-enabled to never"
+      command: "echo never > /sys/kernel/mm/transparent_hugepage/enabled"
+
+    - name: "Set thp-enabled to never"
+      command: "echo never > /sys/kernel/mm/transparent_hugepage/defrag"
+
+    - name: "Persist thp-enabled and thp-defrag settings"
+      lineinfile:
+        path: "/etc/rc.local"
+        line: |
+          echo never > /sys/kernel/mm/transparent_hugepage/enabled
+          echo never > /sys/kernel/mm/transparent_hugepage/defrag
+        create: yes
+        state: present
+        mode: "0755"
+
+- name: "Set Zone reclaim mode"
+  ansible.posix.sysctl:
+    name: vm.zone_reclaim_mode
+    value: 0
+    state: present
+    sysctl_set: true
+    reload: yes
+
+- name: "Set somaxconn"
+  ansible.posix.sysctl:
+    name: net.core.somaxconn
+    value: 4096
+    state: present
+    sysctl_set: true
+    reload: yes
+
+- name: "Set rmem-max"
+  ansible.posix.sysctl:
+    name: net.core.rmem_max
+    value: "15728640"
+    state: present
+    sysctl_set: true
+    reload: yes
+
+- name: "Set rmem-max"
+  ansible.posix.sysctl:
+    name: net.core.wmem_max
+    value: "5242880"
+    state: present
+    sysctl_set: true
+    reload: yes

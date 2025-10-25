@@ -1,0 +1,60 @@
+def springDataScriptPath = "/devops/run_tests/springData/SpringDatraScript.groovy"
+def springDataScript
+
+pipeline {
+
+    agent {
+        label "${params.jenkins_slave}"
+    }
+    parameters {
+        booleanParam(name: 'reinstall_spring_data', defaultValue: true)
+        string(name: 'spring_data_branch', defaultValue: 'main', description: 'The Spring Data Aerospike branch you want to install from')
+        string(name: 'spring_data_version', defaultValue: '5.0.0', description: 'The Spring Data version you want to test')
+        choice(name: 'jvm_suspend', description: 'JVM Suspend For Remote Debug', choices: ['n', 'y'])
+        choice(name: 'parallel_classes', description: 'How many test classes to run in parallel', choices: ['5', '1', '2', '3', '4', '6', '7', '8', '9', '10', '15', '20'])
+        choice(name: 'asdb_version', description: 'Set the version of the bootstrapped Aerospike Server image', choices: ['7.1.0.2', '7.0.0.3', '6.1.0.28', '6.4.0.6'])
+        choice(name: 'jenkins_slave', description: 'The slave that the job will run on', choices: ['AllSlaves', 'Slave1', 'Slave2', 'Slave3'])
+        string(name: 'notes', defaultValue: 'No Notes', description: 'Add notes that will be shown in the Report Portal')
+    }
+    options {
+        timeout(time: 1, unit: 'HOURS')
+        buildDiscarder(logRotator(numToKeepStr: '10', daysToKeepStr: '30'))
+    }
+
+    environment {
+        GITHUB_TOKEN = credentials('GITHUB_TOKEN')
+    }
+
+    stages {
+        stage('Uninstall Spring Data') {
+            when {
+                expression { return params.reinstall_spring_data }
+            }
+            steps {
+                script {
+                    springDataScript = load pwd() + springDataScriptPath
+                    springDataScript.uninstall()
+                }
+            }
+        }
+        stage('Install Spring Data') {
+            when {
+                expression { return params.reinstall_spring_data }
+            }
+            steps {
+                script {
+                    springDataScript.install()
+                }
+            }
+        }
+
+        stage('Run Spring Data tests') {
+            steps {
+                script {
+                    springDataScript = load pwd() + springDataScriptPath
+                    springDataScript.runMvnIntegrationTest("SPRING-DATA-TESTS-1")
+                }
+            }
+        }
+    }
+}

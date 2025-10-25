@@ -1,0 +1,15 @@
+- name: Create Ubuntu user and group
+  block:
+    - name: Create Jenkins group
+      group:
+        name: ubuntu
+        state: present
+
+    - name: Create Ubuntu user with specific home and shell
+      user:
+        name: ubuntu
+        group: ubuntu
+        home: /home/ubuntu
+        shell: /bin/bash
+        createhome: yes
+        state: present

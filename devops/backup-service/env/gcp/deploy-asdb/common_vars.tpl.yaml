@@ -1,0 +1,28 @@
+workspace: "${ASDB_WORKSPACE}"
+prefix: "ecosys"
+
+gcp:
+  project_id: "ecosystem-connectors-data"
+  region: "me-west1"
+
+ops_agent: "${OPS_AGENT}"
+
+asdb:
+  machine_type: "${ASDB_MACHINE_TYPE}"
+  version: "${ASDB_VERSION}"
+  size: "${ASDB_SIZE}"
+  arch: "${ASDB_ARCHS}"
+  distro: "${ASDB_DISTRO}"
+  namespaces: "${ASDB_NAMESPACES}"
+  device_type: "${ASDB_DEVICE_TYPE}"
+  security_type: "${ASDB_SECURITY_TYPE}"
+  section_selection: [${ASDB_SECTION_SELECTION}]
+  secret_agent: "${SECRET_AGENT}"
+  devices: "${ASDB_DEVICES}"
+  strong_consistency: "${ASDB_SC_ENABLED}"
+  roster: "${ASDB_ROSTER}"
+  device_shadow: "${ASDB_DEVICE_SHADOW}"
+  load_balancer: "${ASDB_LOAD_BALANCER}"
+  encryption_at_rest: "${ENCRYPTION_AT_REST_ENABLED}"
+  multi_zone: "${MULTI_ZONE_DEPLOYMENT}"
+  single_query_threads: "${ASDB_SINGLE_QUERY_THREADS}"

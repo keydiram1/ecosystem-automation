@@ -1,0 +1,41 @@
+workspace: "${WS}"
+
+prefix: "ecosys"
+
+gcp:
+  project_id: "ecosystem-connectors-data"
+  region: "me-west1"
+
+asdb:
+  machine_type: "n2-custom-8-32768"
+#  machine_type: "n2-standard-4"
+  version: "${ASDB_VERSION}"
+  size: "${ASDB_SIZE}"
+  arch: "${ASDB_ARCHS}"
+  distro: "${ASDB_DISTRO}"
+
+minio:
+  machine_type: "n2d-standard-4"
+
+storage:
+  provider: "${AEROSPIKE_BACKUP_SERVICE_STORAGE}"
+
+gke:
+  node_pools:
+    - pool_name: "${GKE_POOL_NODE_NAME}"
+      machine_type: "e2-highcpu-16"
+      autoscaling:
+        min_size: "${GKE_POOL_MIN_SIZE}"
+        max_size: "${GKE_POOL_MAX_SIZE}"
+
+k8s:
+  istio:
+    enabled: "${ISTIO_ENABLED}"
+    chart_version: "${ISTIO_HELM_CHART_VERSION}"
+  abs:
+    enabled: "${AEROSPIKE_BACKUP_SERVICE_ENABLED}"
+    namespace: "aerospike"
+    version: "${AEROSPIKE_BACKUP_SERVICE_VERSION}"
+  asa:
+    enabled: "${AEROSPIKE_SECRET_AGENT_ENABLED}"
+    version: "${AEROSPIKE_SECRET_AGENT_VERSION}"

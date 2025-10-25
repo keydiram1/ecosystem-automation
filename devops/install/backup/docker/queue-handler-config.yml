@@ -1,0 +1,12 @@
+---
+backendUri: 'http://rest-backend:8080'
+storageProviderUri: 'http://storage-provider:8081'
+#queuePullingIntervalMs: 1000
+zombieRecoverIntervalMs: 5000
+recordRecoverThresholdMs: 5000
+authenticatorUri: 'http://authenticator:8087'
+auth:
+  enabled: true
+  tokenRefreshSeconds: 82800
+  username: "adr-queue-handler"
+  password: "adr-queue-handler-pwd"

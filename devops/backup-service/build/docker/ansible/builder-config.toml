@@ -1,0 +1,10 @@
+[worker.oci]
+gc = true
+gckeepstorage = 50000
+[[worker.oci.gcpolicy]]
+keepBytes = 3072000000
+keepDuration = 172800
+filters = [ "type==source.local", "type==exec.cachemount", "type==source.git.checkout"]
+[[worker.oci.gcpolicy]]
+all = true
+keepBytes = 3072000000

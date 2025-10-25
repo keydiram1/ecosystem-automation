@@ -1,0 +1,15 @@
+- name: Install KinD
+  block:
+    - name: Get KinD latest version
+      uri:
+        url: https://api.github.com/repos/kubernetes-sigs/kind/releases/latest
+        return_content: yes
+      register: github_kind_response
+
+    - name: "Download KinD latest version"
+      get_url:
+        url: "https://kind.sigs.k8s.io/dl/{{ github_kind_response.json.tag_name }}/kind-linux-{{ architecture_map[ansible_architecture] }}"
+        dest: /usr/local/bin/kind
+        owner: root
+        group: root
+        mode: '0755'

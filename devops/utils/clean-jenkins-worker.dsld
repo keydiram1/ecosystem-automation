@@ -1,0 +1,89 @@
+pipeline {
+    agent none
+
+    parameters {
+        booleanParam(name: 'delete_containers', defaultValue: true)
+        booleanParam(name: 'delete_images', defaultValue: true)
+    }
+
+    options {
+        timeout(time: 10, unit: 'MINUTES')
+    }
+
+    triggers { cron('15 20 * * 4') }
+
+    stages {
+        stage('Delete All Docker Containers') {
+            when {
+                expression { return params.delete_containers }
+            }
+            steps {
+                script {
+                    def nodes = Jenkins.instance.nodes.findAll { node ->
+                        node.getAssignedLabels().find { label -> label.getName() == 'AllSlaves' }
+                    }.collect { it.name }
+
+                    def deleteContainers = [:]
+
+                    nodes.each { nodeName ->
+                        if (isNodeOnline(nodeName)) {
+                            deleteContainers[nodeName] = {
+                                node(nodeName) {
+                                    sh 'docker rm -vf $(docker ps -aq) || true'
+                                }
+                            }
+                        } else {
+                            echo "Node $nodeName is offline. Skipping container deletion..."
+                        }
+                    }
+
+                    parallel deleteContainers
+                }
+            }
+        }
+
+        stage('Delete All Docker Images') {
+            when {
+                expression { return params.delete_images }
+            }
+            steps {
+                script {
+                    def nodes = Jenkins.instance.nodes.findAll { node ->
+                        node.getAssignedLabels().find { label -> label.getName() == 'AllSlaves' }
+                    }.collect { it.name }
+
+                    def deleteImages = [:]
+
+                    nodes.each { nodeName ->
+                        if (isNodeOnline(nodeName)) {
+                            deleteImages[nodeName] = {
+                                node(nodeName) {
+                                    sh 'docker rmi -f $(docker images -aq) || true'
+                                    sh 'docker buildx prune -f'
+                                }
+                            }
+                        } else {
+                            echo "Node $nodeName is offline. Skipping image deletion..."
+                        }
+                    }
+
+                    parallel deleteImages
+                }
+            }
+        }
+    }
+    post {
+        failure {
+            mail from: 'Jenkins@aerospike.com',
+                    to: 'eram@aerospike.com, akorotkov@aerospike.com',
+                    subject: "Job failed: ${env.JOB_NAME}",
+                    body: "Project: ${env.JOB_NAME} <br>Build Number: ${env.BUILD_NUMBER} <br> URL: https://3.122.67.127/",
+                    mimeType: 'text/html'
+        }
+    }
+}
+
+def isNodeOnline(nodeName) {
+    def node = Jenkins.instance.getNode(nodeName)
+    return node != null && node.toComputer().online
+}

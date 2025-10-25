@@ -1,0 +1,202 @@
+- name: EcoSys Automation Server
+  hosts: all
+  gather_facts: no
+
+  vars_files:
+    - "{{ playbook_dir }}/vars/vars.yaml"
+
+  tasks:
+    - name: Refresh Inventory
+      meta: refresh_inventory
+
+    - name: Wait for connection
+      wait_for_connection:
+        delay: 10
+        sleep: 1
+
+    - name: Create Automation Service Account
+      gcp_iam_service_account:
+        name: "{{ service_account }}@{{ project_id }}.iam.gserviceaccount.com"
+        display_name: "{{ service_account }}"
+        project: "{{ project_id }}"
+        auth_kind: "application"
+        state: present
+      register: gcp_sa_info
+
+    - name: Create Automation Service Account Key
+      gcp_iam_service_account_key:
+        service_account: "{{ gcp_sa_info }}"
+        private_key_type: TYPE_GOOGLE_CREDENTIALS_FILE
+        path: "key.json"
+        project: "{{ project_id }}"
+        auth_kind: "application"
+        state: present
+
+    - name: Format the disk with ext4
+      filesystem:
+        fstype: ext4
+        dev: /dev/sdb
+        opts: "-m 0 -E lazy_itable_init=0,lazy_journal_init=0,discard"
+        state: present
+      become: yes
+
+    - name: Create directory /mnt/data
+      file:
+        path: /mnt/data
+        state: directory
+        mode: "0775"
+      become: yes
+
+    - name: Mount /dev/sdb to /mnt/data
+      mount:
+        src: /dev/sdb
+        path: /mnt/data
+        fstype: ext4
+        opts: discard,defaults
+        state: mounted
+      become: yes
+
+    - file:
+        path: /mnt/data
+        group: ubuntu
+        owner: ubuntu
+        recurse: true
+        mode: "0750"
+        state: directory
+      become: yes
+
+    - name: Get Jfrog username
+      command: gcloud secrets versions access latest --project="{{ project_id }}" --secret="docker-username"
+      register: docker_username
+
+    - name: Get Jfrog Password
+      command: gcloud secrets versions access latest --project="{{ project_id }}" --secret="docker-password"
+      register: docker_password
+
+    - name: Get GitHub token
+      command: gcloud secrets versions access latest --project="{{ project_id }}" --secret="github-token"
+      register: github_token
+
+    - name: Copy jcasc.yaml
+      copy:
+        src: "{{ playbook_dir }}/assets/jcasc.yaml"
+        dest: "jcasc.yaml"
+
+    - name: "Archive assets directory contents (without parent directory)"
+      archive:
+        path: "{{ playbook_dir }}/assets/*"
+        dest: "/tmp/assets.tar.gz"
+        format: gz
+      delegate_to: localhost
+
+    - name: "Copy assets archive to remote machine"
+      copy:
+        src: "/tmp/assets.tar.gz"
+        dest: "/tmp/assets.tar.gz"
+
+    - name: "Extract assets archive in /home/ubuntu"
+      unarchive:
+        src: "/tmp/assets.tar.gz"
+        dest: "/home/ubuntu"
+        remote_src: yes
+
+    - name: "Delete assets archive after extraction"
+      file:
+        path: "/tmp/assets.tar.gz"
+        state: absent
+
+    - name: Create jenkins-data Directory
+      file:
+        path: /mnt/data/jenkins-data
+        state: directory
+        mode: "0777"
+        owner: jenkins
+        group: jenkins
+      become: yes
+
+    - name: Create Sqlite DB Directory
+      file:
+        path: /mnt/data/db
+        state: directory
+        mode: "0777"
+        owner: jenkins
+        group: jenkins
+      become: yes
+
+    - name: Ensure the jenkins.db file exists
+      file:
+        path: /mnt/data/db/jenkins.db
+        state: touch
+        mode: '0777'
+        owner: jenkins
+        group: jenkins
+      become: yes
+
+    - name: Create report-portal-data Directory
+      file:
+        path: /mnt/data/report-portal-data/storage
+        state: directory
+        mode: "0775"
+
+    - name: Create report-portal-data Directory
+      file:
+        path: /mnt/data/report-portal-data/opensearch
+        state: directory
+        mode: "0775"
+        group: "1000"
+        recurse: yes
+      become: yes
+
+    - name: Create report-portal-data Directory
+      file:
+        path: /mnt/data/report-portal-data/postgres
+        state: directory
+        mode: "0775"
+        group: "root"
+        owner: "1001"
+        recurse: yes
+      become: yes
+
+    - name: Get Docker Path
+      command: which docker
+      register: docker_path
+
+    - name: Get key.json
+      command: cat key.json
+      register: key_content
+
+    - name: Set permissions on Docker socket
+      file:
+        path: /var/run/docker.sock
+        mode: "0666"
+      become: yes
+
+    - name: Jfrog Artifactory Login
+      docker_login:
+        registry_url: "aerospike.jfrog.io"
+        username: "{{ docker_username.stdout }}"
+        password: "{{ docker_password.stdout }}"
+
+    - name: Build docker compose
+      command: docker compose -f docker-compose-jenkins.yml up --build job-executor
+      environment:
+        PROJECT_ID: "{{ project_id }}"
+        REGION: "{{ region }}"
+        ZONE: "{{ zone }}"
+        SA_KEY: "{{ key_content.stdout | b64encode | replace('\n', ' ') }}"
+        CASC_JENKINS_CONFIG: "/usr/share/jenkins"
+        DOCKER: "{{ docker_path.stdout }}"
+        GITHUB_TOKEN: "{{ github_token.stdout }}"
+        GITHUB_USERNAME: "user"
+
+    - name: Run docker compose
+      command: docker compose -f docker-compose-jenkins.yml up -d
+      environment:
+        PROJECT_ID: "{{ project_id }}"
+        REGION: "{{ region }}"
+        ZONE: "{{ zone }}"
+        SA_KEY: "{{ key_content.stdout | b64encode | replace('\n', ' ') }}"
+        CASC_JENKINS_CONFIG: "/usr/share/jenkins"
+        DOCKER: "{{ docker_path.stdout }}"
+        GITHUB_TOKEN: "{{ github_token.stdout }}"
+        GITHUB_USERNAME: "user"

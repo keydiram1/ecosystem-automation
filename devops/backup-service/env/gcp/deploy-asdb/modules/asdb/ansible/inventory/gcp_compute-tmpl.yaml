@@ -1,0 +1,28 @@
+plugin: google.cloud.gcp_compute
+
+projects:
+  - ${PROJECT}
+
+filters:
+  - status = RUNNING
+  - labels.workspace = ${WORKSPACE}
+  - labels.service = ${MODULE_NAME}
+
+auth_kind: application
+
+scopes:
+  - 'https://www.googleapis.com/auth/cloud-platform'
+  - 'https://www.googleapis.com/auth/compute.readonly'
+
+keyed_groups:
+  - prefix: ${WORKSPACE}-asdb
+    key: labels
+  - key: "'gcp_compute'"
+    prefix: ""
+    separator: ""
+
+hostnames:
+  - name
+
+compose:
+  ansible_host: selfLink

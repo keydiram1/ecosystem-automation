@@ -1,0 +1,88 @@
+pipeline {
+    agent none
+
+    parameters {
+        string(name: 'job_name', defaultValue: 'test-spring-data-local', description: 'The name of the job you want to run 10 times')
+        string(name: 'automation_branch', defaultValue: 'master', description: 'The Automation branch with the tests you want to run')
+    }
+
+    options {
+        timeout(time: 120, unit: 'MINUTES')
+    }
+
+    environment {
+        GITHUB_TOKEN = credentials('GITHUB_TOKEN')
+    }
+
+    stages {
+        stage('Get Parameters') {
+            steps {
+                build job: "${job_name}", wait: false, propagate: true
+                sleep 10
+            }
+        }
+        stage('Run job 10 times') {
+            parallel {
+                stage('Run 1') {
+                    steps {
+                        build job: "${job_name}/${automation_branch}", propagate: true
+                    }
+                }
+                stage('Run 2') {
+                    steps {
+                        sleep 20
+                        build job: "${job_name}/${automation_branch}", propagate: true
+                    }
+                }
+                stage('Run 3') {
+                    steps {
+                        sleep 30
+                        build job: "${job_name}/${automation_branch}", propagate: true
+                    }
+                }
+                stage('Run 4') {
+                    steps {
+                        sleep 40
+                        build job: "${job_name}/${automation_branch}", propagate: true
+                    }
+                }
+                stage('Run 5') {
+                    steps {
+                        sleep 50
+                        build job: "${job_name}/${automation_branch}", propagate: true
+                    }
+                }
+                stage('Run 6') {
+                    steps {
+                        sleep 60
+                        build job: "${job_name}/${automation_branch}", propagate: true
+                    }
+                }
+                stage('Run 7') {
+                    steps {
+                        sleep 70
+                        build job: "${job_name}/${automation_branch}", propagate: true
+                    }
+                }
+                stage('Run 8') {
+                    steps {
+                        sleep 80
+                        build job: "${job_name}/${automation_branch}", propagate: true
+                    }
+                }
+                stage('Run 9') {
+                    steps {
+                        sleep 90
+                        build job: "${job_name}/${automation_branch}", propagate: true
+                    }
+                }
+                stage('Run 10') {
+                    steps {
+                        sleep 100
+                        build job: "${job_name}/${automation_branch}", propagate: true
+                    }
+                }
+            }
+        }
+    }
+}

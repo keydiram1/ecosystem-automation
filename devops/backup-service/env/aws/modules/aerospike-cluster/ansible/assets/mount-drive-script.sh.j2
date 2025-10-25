@@ -1,0 +1,18 @@
+#!/bin/bash
+
+MOUNT_PATH="{{ mount_point | quote }}"
+OUTPUT=$(ls /dev/nvme*p* | grep -v nvme0)
+n=0
+
+readarray -t array <<< "$OUTPUT"
+
+# Print the elements of the array
+for element in "${array[@]}"
+do
+  if [ "$(mountpoint -q "$MOUNT_PATH-$n"; echo $? )" == 1  ]; then
+  sudo mkfs -t xfs "$element"
+  sudo mkdir -p "$MOUNT_PATH-$n"
+  sudo mount "$element" "$MOUNT_PATH-$n"
+  fi
+    n=$((n+1))
+done

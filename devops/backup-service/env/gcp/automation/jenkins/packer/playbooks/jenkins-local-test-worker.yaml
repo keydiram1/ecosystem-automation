@@ -1,0 +1,20 @@
+- name: Install EcoEng Jenkins Local Test Worker Dependencies
+  hosts: all
+  gather_facts: yes
+  become: yes
+
+  vars_files:
+    - "{{ playbook_dir }}/vars/vars.yaml"
+
+  tasks:
+    - include_tasks: "{{ playbook_dir }}/modules/core-tasks.yaml"
+    - include_tasks: "{{ playbook_dir }}/modules/jenkins-user.yaml"
+    - include_tasks: "{{ playbook_dir }}/modules/google-ops-agent.yaml"
+    - include_tasks: "{{ playbook_dir }}/modules/asdb-tools.yaml"
+    - include_tasks: "{{ playbook_dir }}/modules/golang.yaml"
+    - include_tasks: "{{ playbook_dir }}/modules/docker.yaml"
+    - include_tasks: "{{ playbook_dir }}/modules/allure.yaml"
+    - include_tasks: "{{ playbook_dir }}/modules/java.yaml"
+    - include_tasks: "{{ playbook_dir }}/modules/maven.yaml"
+    - include_tasks: "{{ playbook_dir }}/modules/maven-deps.yaml"
+    - include_tasks: "{{ playbook_dir }}/modules/cleanup.yaml"

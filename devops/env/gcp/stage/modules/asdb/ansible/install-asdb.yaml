@@ -1,0 +1,172 @@
+- name: "ASDB Installation"
+  hosts: all
+  gather_facts: no
+  become: yes
+  
+  vars_files:
+    - "{{ playbook_dir }}/vars/vars.yaml"
+  remote_user: "{{ user }}"
+  tasks:
+    - name: Refresh Inventory
+      meta: refresh_inventory
+
+    - name: "Wait for connection"
+      wait_for_connection:
+        timeout: 300
+
+    - name: "Get ASDB download URL"
+      command:
+        cmd: python3 get-asdb-download-url.py
+        chdir: "{{ playbook_dir }}/assets"
+      environment:
+        DISTRO: "{{ distro }}"
+        ARCH: "{{ arch }}"
+        ASDB_VERSION: "{{ asdb_version }}"
+      register: download_url
+      run_once: true
+      become: no
+      delegate_to: "localhost"
+
+    - name: "Get Installation Directory name"
+      set_fact:
+        download_file: "{{ download_url.stdout | basename }}"
+
+    - name: "Download ASDB"
+      get_url:
+        url: "{{ download_url.stdout }}"
+        dest: "/tmp/{{ download_file }}"
+
+    - name: "Unpack ASDB"
+      unarchive:
+        remote_src: yes
+        src: "/tmp/{{ download_file }}"
+        dest: "/tmp"
+
+    - name: "Get cluster IP addresses"
+      set_fact:
+        cluster_ip_addresses: "{{ cluster_ip_addresses + [ hostvars[item].networkInterfaces[0].networkIP ] }}"
+      with_items:
+        - "{{ groups[ workspace.replace('-', '_') + '_asdb_workspace_' + workspace.replace('-', '_') ] }}"
+      vars:
+        cluster_ip_addresses: [ ]
+
+    - name: "Generate aerospike.conf locally"
+      block:
+        - name: "Include tasks to generate aerospike.conf"
+          include_tasks: "{{ playbook_dir }}/modules/generate-asdb-conf-tasks.yaml"
+
+        - name: "Check if aerospike.conf is generated"
+          stat:
+            path: "{{ playbook_dir }}/assets/aerospike.conf"
+          register: aerospike_conf
+
+      delegate_to: "localhost"
+      run_once: true
+      become: no
+
+    - name: "Create /etc/aerospike directory"
+      file:
+        path: "/etc/aerospike"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: "Create /var/log/aerospike directory"
+      file:
+        path: "/var/log/aerospike"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: "Run Best Practice steps"
+      import_tasks: "{{ playbook_dir }}/modules/best-practices-tasks.yaml"
+
+    - name: "Get TLS Root CA"
+      google.cloud.gcp_secret_manager:
+        name: "ca-aerospike-com-pem"
+        state: present
+        project: "{{ project_id }}"
+        auth_kind: "application"
+      delegate_to: localhost
+      run_once: true
+      become: no
+      register: ca_aerospike_com_pem
+
+    - name: "Copy TLS Root CA"
+      copy:
+        dest: "{{ aerospike.certs_dir }}/ca.aerospike.com.pem"
+        content: "{{ ca_aerospike_com_pem.value }}"
+        mode: "0644"
+        owner: "root"
+        group: "root"
+
+    - name: "Install ASDB"
+      command:
+        cmd: "./asinstall"
+        chdir: "/tmp/{{ download_file | splitext | first }}"
+
+    - name: "Upload aerospike.conf from localhost"
+      copy:
+        src: "{{ playbook_dir }}/assets/aerospike.conf"
+        dest: "/etc/aerospike/aerospike.conf"
+        owner: root
+        group: root
+        mode: "0644"
+      when: aerospike_conf.stat.exists
+
+    - name: "Executing Following Tasks only if aerospike.conf is not found on localhost"
+      block:
+        - name: "Generate ASDB aerospike.yaml"
+          template:
+            src: "{{ playbook_dir }}/assets/aerospike.yaml.j2"
+            dest: "/etc/aerospike/aerospike.yaml"
+            mode: "0644"
+            owner: root
+            group: root
+
+        - name: "Convert aerospike.yaml to aerospike.conf"
+          shell:
+            cmd: "asconfig convert --aerospike-version {{ version }} aerospike.yaml --output aerospike.conf"
+            chdir: "/etc/aerospike"
+      when: not aerospike_conf.stat.exists
+
+    - name: "List of NVMe devices"
+      find:
+        file_type: link
+        paths: /dev/
+        recurse: true
+        patterns: "^google-local-nvme-ssd-*"
+        use_regex: yes
+      register: nvme_devices
+
+    - name: "Iterate over NVMe devices"
+      include_tasks: "{{ playbook_dir }}/modules/mount-fs-tasks.yaml"
+      loop: "{{ nvme_devices.files }}"
+      loop_control:
+        index_var: idx
+
+    - name: "Create and update override.conf for aerospike"
+      copy:
+        dest: "/etc/systemd/system/aerospike.service.d/override.conf"
+        content: |
+          [Service]
+          LimitNOFILE={{ aerospike.proto_fd_max }}
+        mode: "0644"
+
+    - name: "Start ASDB"
+      service:
+        name: aerospike
+        state: started
+      register: service_result
+      until: service_result.status.ActiveState == "active"
+      retries: 5
+      delay: 60
+
+    - name: "Pinning ASDB on Certain vCPUs"
+      command: taskset -c 0-4 /usr/bin/asd --config-file /etc/aerospike/aerospike.conf
+
+    - name: "Create ASDB User"
+      command: asadm -h "127.0.0.1:{{ aerospike.tls_name }}:{{ aerospike.service_port }}" -U admin -P admin --tls-enable --tls-cafile="{{ aerospike.certs_dir }}/ca.aerospike.com.pem" -e "enable; manage acl create user tester password psw roles truncate sindex-admin user-admin data-admin read-write read write read-write-udf sys-admin udf-admin"
+      run_once: true

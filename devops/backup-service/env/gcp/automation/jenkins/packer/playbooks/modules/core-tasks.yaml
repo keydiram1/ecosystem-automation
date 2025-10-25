@@ -1,0 +1,11 @@
+- name: Perform core tasks
+  block:
+    - name: Upgrade all packages using apt
+      apt:
+        upgrade: dist
+        update_cache: yes
+
+    - name: Update all packages to their latest version
+      apt:
+        name: "*"
+        state: latest

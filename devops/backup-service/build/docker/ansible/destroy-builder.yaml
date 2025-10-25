@@ -1,0 +1,68 @@
+- name: Destroy Builder
+  hosts: localhost
+  gather_facts: yes
+  vars_files:
+    - vars.yaml
+  tasks:
+    - name: Check if docker builder exists
+      shell: docker buildx ls | grep -q "{{ docker_builder_name }}"
+      ignore_errors: yes
+      register: command_output
+
+    - name: Switch to default builder
+      command: docker buildx use default
+      when: command_output.rc == 0
+
+    - name: Remove docker buildx builder
+      command: docker buildx rm "{{ docker_builder_name }}"
+      ignore_errors: yes
+      when: command_output.rc == 0
+
+    - name: Retrieve builder details
+      ec2_instance_info:
+        region: "{{ region }}"
+        filters:
+          "tag:Group": "{{ tags.group }}"
+          instance-state-name: [ "running", "stopped" ]
+      register: instance_details
+
+    - name: Print the Instance IDs
+      debug:
+          msg: "Instance IDs are: {{ instance_details.instances | map(attribute='instance_id') | list }}"
+
+    - name: Terminate instances
+      ec2_instance:
+        instance_ids: "{{ instance_details.instances | map(attribute='instance_id') | list }}"
+        state: absent
+        region: "{{ region }}"
+      when: instance_details.instances | length > 0
+
+    - name: Delete EC2 key pair
+      ec2_key:
+        name: "{{ key_name }}"
+        region: "{{ region }}"
+        state: absent
+
+    - name: Delete private key local file
+      file:
+        path: "./{{ key_name }}.pem"
+        state: absent
+
+    - name: Get security group info
+      ec2_group_info:
+        filters:
+          "tag:Name": "{{ tags.group }}"
+        region: "{{ region }}"
+      register: sg_info
+
+    - name: Print security group IDs
+      debug:
+        msg: "{{ sg_info.security_groups | map(attribute='group_id') | list }}"
+      when: sg_info.security_groups | length > 0
+
+    - name: Delete security group
+      ec2_group:
+        group_id: "{{ (sg_info.security_groups | map(attribute='group_id') | list)[0] }}"
+        region: "{{ region }}"
+        state: absent
+      when: sg_info.security_groups | length > 0

@@ -1,0 +1,67 @@
+name: Nightly Build
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 20 * * *'
+jobs:
+  last-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if the last commit was today
+        id: check-commit
+        run: |
+          LAST_COMMIT_DATE="$(date -u -d \
+          $(curl -H "Accept: application/vnd.github.v3+json" \
+          "https://api.github.com/repos/aerospike/aerospike-backup-service/commits" | \
+          jq -r '.[0].commit.committer.date') "+%Y-%m-%d")"
+          TODAY="$(date -u +%Y-%m-%d)"
+          if [ "$LAST_COMMIT_DATE" == "$TODAY" ]; then
+            echo "commit_today=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "commit_today=false" >> "$GITHUB_OUTPUT"
+          fi
+    outputs:
+      commit_today: ${{ steps.check-commit.outputs.commit_today }}
+  nightly-build:
+    needs: last-commit
+    if: ${{ needs.last-commit.outputs.commit_today == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Automation Code
+        uses: actions/checkout@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Setup Jfrog
+        uses: jfrog/setup-jfrog-cli@v3
+        env:
+          JF_URL: ${{ secrets.ARTIFACTORY_URL }}
+          JF_ACCESS_TOKEN: ${{ secrets.ARTIFACTORY_TOKEN }}
+      - name: Login to JFrog
+        uses: docker/login-action@v2
+        with:
+          registry: aerospike.jfrog.io
+          username: ${{ secrets.ARTIFACTORY_USER }}
+          password: ${{ secrets.ARTIFACTORY_TOKEN }}
+      - name: Get Repo Metadata
+        id: repo-metadata
+        run: |
+          echo "git_commit_sha="$(curl -s "https://api.github.com/repos/aerospike/aerospike-backup-service/branches/main" | jq -r '.commit.sha')"" >> "$GITHUB_OUTPUT"
+          echo "version="$(curl -s "https://api.github.com/repos/aerospike/aerospike-backup-service/tags" | jq -r '.[0].name')"" >> "$GITHUB_OUTPUT"
+          echo "iso8601="$(date "+%Y-%m-%dT%H:%M:%S%z")"" >> "$GITHUB_OUTPUT"
+          echo "today="$(date -u +%Y-%m-%d)"" >> "$GITHUB_OUTPUT"
+      - name: Build and Push
+        uses: docker/bake-action@v4
+        env:
+          CACHEBUST: 1
+          TAG: nightly${{ steps.repo-metadata.outputs.today }}
+          GIT_BRANCH: main
+          GIT_COMMIT_SHA: ${{ steps.repo-metadata.outputs.git_commit_sha }}
+          VERSION: ${{ steps.repo-metadata.outputs.version }}
+          ISO8601: ${{ steps.repo-metadata.outputs.iso8601 }}
+        with:
+          workdir: ${{ github.workspace }}/devops/backup-service/build/docker
+          files: docker-bake.hcl
+          targets: default

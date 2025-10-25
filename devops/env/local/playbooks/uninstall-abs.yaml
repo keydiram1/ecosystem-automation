@@ -1,0 +1,15 @@
+- name: "Uninstall Aerospike Backup Service"
+  hosts: localhost
+  connection: local
+
+  vars_files:
+    - "./vars/vars.yaml"
+
+  tasks:
+    - name: "Uninstall Helm release for ABS"
+      kubernetes.core.helm:
+        name: abs
+        release_namespace: aerospike
+        state: absent
+        wait: yes
+      failed_when: false

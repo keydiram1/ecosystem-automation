@@ -1,0 +1,12 @@
+workspace: "${ABS_WORKSPACE}"
+prefix: "ecosys"
+
+gcp:
+  project_id: "ecosystem-connectors-data"
+  region: "me-west1"
+
+k8s:
+  abs:
+    image-tag: "${ABS_IMAGE_TAG}"
+    storage-provider: "${ABS_STORAGE_PROVIDER}"
+    device-type: "${ASDB_DEVICE_TYPE}"

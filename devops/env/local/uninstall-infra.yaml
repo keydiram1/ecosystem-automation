@@ -1,0 +1,121 @@
+- name: "Uninstall ASDB Cluster"
+  hosts: localhost
+  connection: local
+
+  vars:
+    ansible_python_interpreter: "/opt/python_venv/bin/python3"
+    
+  vars_files:
+    - "{{ playbook_dir }}/vars/vars.yaml"
+
+  tasks:
+    - name: "Set Variables"
+      set_fact:
+        asdb_version: "{{ lookup('env', 'ASDB_VERSION', default=aerospike.version) | string }}"
+        asdb_size: "{{ lookup('env', 'ASDB_SIZE', default=aerospike.size) | int }}"
+        asdb_tls_enabled: "{{ lookup('env', 'ASDB_TLS_ENABLED', default=aerospike.tls_enabled) | bool }}"
+        asdb_roster_enabled: "{{ lookup('env', 'ASDB_ROSTER_ENABLED', default=aerospike.roster_enabled) | bool }}"
+        asdb_sc_enabled: "{{ lookup('env', 'ASDB_SC_ENABLED', default=aerospike.sc_enabled) | bool }}"
+        asdb_namespaces: "{{ lookup('env', 'ASDB_NAMESPACES', default=aerospike.namespaces) | int }}"
+        asdb_ns_replication_factor: "{{ lookup('env', 'ASDB_NS_REPLICATION_FACTOR', default=aerospike.replication_factor) | int }}"
+        ca_aerospike_com_pem_path: "{{ lookup('env', 'CA_AEROSPIKE_COM_PEM_PATH') | string }}"
+
+    - name: "Switch to KinD Context"
+      command: kubectl config use-context "{{ kind.cluster_context }}"
+      failed_when: false
+
+    - name: "Delete Aerospike TLS secret"
+      kubernetes.core.k8s:
+        state: absent
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: aerospike-tls
+            namespace: aerospike
+      when: asdb_tls_enabled
+      failed_when: false
+
+    - name: "Delete Kubernetes admin-auth secret"
+      kubernetes.core.k8s:
+        state: absent
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: admin-auth
+            namespace: aerospike
+      failed_when: false
+
+    - name: "Delete Kubernetes tester-auth secret"
+      kubernetes.core.k8s:
+        state: absent
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: tester-auth
+            namespace: aerospike
+      failed_when: false
+
+    - name: "Delete Kubernetes Docker registry secret"
+      kubernetes.core.k8s:
+        state: absent
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: regcred
+            namespace: aerospike
+      failed_when: false
+
+    - name: "Delete ASDB configuration"
+      kubernetes.core.k8s:
+        state: absent
+        definition:
+          apiVersion: asdb.aerospike.com/v1
+          kind: AerospikeCluster
+          metadata:
+            name: aerocluster
+            namespace: aerospike
+      failed_when: false
+
+    - name: "Delete Kubernetes Service for Aerospike Secret Agent"
+      kubernetes.core.k8s:
+        state: absent
+        definition:
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: aerospike-secret-agent
+            namespace: aerospike
+
+    - name: "Delete Deployment for Aerospike Secret Agent"
+      k8s:
+        state: absent
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: aerospike-secret-agent
+            namespace: aerospike
+
+    - name: "Delete Kubernetes secret with Aerospike Secret Agent credentials"
+      k8s:
+        state: absent
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: aerospike-secret-agent-local-sa-secret
+            namespace: aerospike
+
+    - name: "Delete ConfigMap for Aerospike Secret Agent"
+      k8s:
+        state: absent
+        definition:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: aerospike-secret-agent-cm
+            namespace: aerospike

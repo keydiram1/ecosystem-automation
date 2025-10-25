@@ -1,0 +1,8 @@
+plugin: amazon.aws.aws_ec2
+aws_profile: default
+regions:
+  - "eu-central-1"
+
+filters:
+  tag:Group: "abs-base-image-builder"
+  instance-state-name: [running, pending]

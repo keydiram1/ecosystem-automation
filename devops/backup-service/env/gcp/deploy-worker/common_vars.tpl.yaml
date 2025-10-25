@@ -1,0 +1,14 @@
+workspace: "${WORKER_WORKSPACE}"
+prefix: "ecosys"
+
+gcp:
+  project_id: "ecosystem-connectors-data"
+  region: "me-west1"
+
+worker:
+  machine_type: "${WORKER_MACHINE_TYPE}"
+  devices: "${WORKER_DEVICES}"
+  ops_agent: "${WORKER_OPS_AGENT}"
+  clone_backup_cli_repo: "${WORKER_CLONE_BACKUP_CLI_REPO}"
+  clone_backup_service_repo: "${WORKER_CLONE_BACKUP_SERVICE_REPO}"
+  clone_backup_library_repo: "${WORKER_CLONE_BACKUP_LIBRARY_REPO}"

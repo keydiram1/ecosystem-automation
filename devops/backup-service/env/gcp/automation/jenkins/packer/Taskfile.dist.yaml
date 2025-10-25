@@ -1,0 +1,23 @@
+version: '3'
+tasks:
+  packer:build:jenkins-server:
+    cmds:
+      - "{{.TASKFILE_DIR}}/scripts/build-packer-image.sh --target {{.TASK}} --disk-size 20"
+  packer:build:jenkins-artifact-builder:
+    cmds:
+      - "{{.TASKFILE_DIR}}/scripts/build-packer-image.sh --target {{.TASK}} --disk-size 20"
+  packer:build:jenkins-local-test-worker:
+    cmds:
+      - "{{.TASKFILE_DIR}}/scripts/build-packer-image.sh --target {{.TASK}} --disk-size 20"
+  packer:build:jenkins-gcp-test-worker:
+    cmds:
+      - "{{.TASKFILE_DIR}}/scripts/build-packer-image.sh --target {{.TASK}} --disk-size 20"
+  packer:build:jenkins-multi-node-local-tests-worker:
+    cmds:
+      - "{{.TASKFILE_DIR}}/scripts/build-packer-image.sh --target {{.TASK}} --local-storage true --machine-type n2d-standard-8 --disk-size 20"
+  packer:build:jenkins-gcp-env-provisioner:
+    cmds:
+      - "{{.TASKFILE_DIR}}/scripts/build-packer-image.sh --target {{.TASK}} --disk-size 20"
+  packer:build:worker-instance:
+    cmds:
+      - "{{.TASKFILE_DIR}}/scripts/build-packer-image.sh --target {{.TASK}} --disk-size 20"

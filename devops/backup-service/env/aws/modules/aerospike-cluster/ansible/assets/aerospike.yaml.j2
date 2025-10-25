@@ -1,0 +1,106 @@
+service:
+  user: root
+  group: root
+  pidfile: var/run/aerospike/asd.pid
+  proto-fd-max: 15000
+{#  cluster-name: {{ cluster_name }}#}
+  cluster-name: server.abs
+  secrets-address-port: "{{ secret_agent }} {{ secret_agent_port }}"
+{#  secrets-tls-context: {{ secret_agent_tls_name }}#}
+{#  secrets-tls-context: {{ secret_agent_tls_name }}#}
+{#  node-id: {% include "assets/sub-templates/reverse-formatted-ip.j2" | string %}#}
+
+security: {}
+
+logging:
+  - aggr: info
+    name: /var/log/aerospike/udf.log
+    udf: info
+  - any: info
+    name: /var/log/aerospike/aerospike.log
+
+network:
+  tls:
+{#    - name: secrets-tls#}
+{#      ca-file: {{ certificates_directory }}/agent.pem#}
+    - name: {{ tls_name }}
+      cert-file: secrets:TestEnvTls:server_pem
+      key-file: secrets:TestEnvTls:server_key
+      ca-file: {{ certificates_directory }}/rootCA.pem
+  service:
+    tls-addresses:
+      - any
+    tls-port: {{ tls_service_port }}
+    tls-name: {{ tls_name }}
+    tls-authenticate-client: false
+  heartbeat:
+    mode: mesh
+{#    tls-name: {{ tls_name }}#}
+{#    tls-port: {{ tls_heartbeat_port }}#}
+{#    tls-mesh-seed-address-ports:#}
+{#      {%- for ip_address in cluster_ip_addresses +%}#}
+{#      - {{ ip_address }} {{ tls_heartbeat_port }}#}
+{#      {%- endfor +%}#}
+    port: {{ heartbeat_port }}
+    mesh-seed-address-ports:
+      {%- for ip_address in instance_private_ips +%}
+      - {{ ip_address }} {{ heartbeat_port }}
+      {%- endfor +%}
+    interval: 150
+    timeout: 10
+  fabric:
+    addresses:
+      - any
+{#    tls-port: {{ tls_fabric_port }}#}
+{#    tls-name: {{ tls_name }}#}
+    port: {{ fabric_port }}
+
+  info:
+    port: {{ info_port }}
+
+
+namespaces:
+{% for i in range(namespaces) %}
+  - name: source-ns{{ i + 1 }}
+    replication-factor: 2
+    {%- if i + 1 == 7 +%}
+    max-record-size: 8388608
+    {%- endif +%}
+{#    memory-size: 1073741824#}
+    default-ttl: 2592000
+    nsup-period: 120
+    {%- if partition_tree_sprigs is defined +%}
+    partition-tree-sprigs: {{ partition_tree_sprigs }}
+    {%- endif +%}
+{#    {%- if enterprise +%}#}
+{#    rack-id: {% include "assets/sub-templates/reverse-formatted-subnet.j2" | string %}#}
+{#    {%- endif +%}#}
+    {%- if strong_consistency +%}
+    strong-consistency: true
+    {%- endif +%}
+    storage-engine:
+      type: device
+      {%- if encryption_at_rest +%}
+      encryption-key-file: {{ encryption_key_file_path }}
+      {%- endif +%}
+      {%- if not mount_drive_as_fs  +%}
+      devices:
+      {%- for nvme_device in nvme_devices +%}
+        - {{ nvme_device }}
+      {%- endfor +%}
+      {%- endif +%}
+      {%- if mount_drive_as_fs +%}
+      files:
+        - {{ mount_point }}-0/source-ns{{ i + 1 }}.dat
+      filesize: 4294967296
+      {%- endif +%}
+    {%- if all_flash +%}
+    index-type:
+      type: flash
+      mounts-size-limit: {{ flash_data_size }}G
+      mounts:
+    {%- for all_flash_device in all_flash_devices +%}
+        - {{ all_flash_device }}
+    {%- endfor +%}
+    {%- endif +%}
+{% endfor %}

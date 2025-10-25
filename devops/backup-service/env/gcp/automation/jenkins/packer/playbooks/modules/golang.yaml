@@ -1,0 +1,49 @@
+- name: Install Golang
+  block:
+    - name: Install Makefile
+      apt:
+        update_cache: yes
+        name:
+          - make
+
+    - name: Fetch latest Go version
+      uri:
+        url: https://go.dev/VERSION?m=text
+        return_content: yes
+      register: go_version_response
+
+    - name: Extract Go version
+      set_fact:
+        latest_go_version: "{{ go_version_response.content.split('\n')[0] }}"
+
+    - name: Download Golang .tar.gz package
+      get_url:
+        url: "https://go.dev/dl/{{ latest_go_version }}.linux-{{ architecture_map[ansible_architecture] }}.tar.gz"
+        dest: "/tmp/{{ latest_go_version }}.linux-{{ architecture_map[ansible_architecture] }}.tar.gz"
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Extract Golang .tar.gz package
+      unarchive:
+        src: "/tmp/{{ latest_go_version }}.linux-{{ architecture_map[ansible_architecture] }}.tar.gz"
+        dest: /usr/local
+        remote_src: yes
+
+    - name: Remove Golang .tar.gz package
+      file:
+        path: "/tmp/{{ latest_go_version }}.linux-{{ architecture_map[ansible_architecture] }}.tar.gz"
+        state: absent
+
+    - name: Update environment variables
+      lineinfile:
+        path: /etc/profile.d/golang.sh
+        create: yes
+        line: "export {{ item }}"
+      loop:
+        - 'PATH=/usr/local/go/bin:${PATH}'
+
+    - name: Make Golang environment script executable
+      file:
+        path: /etc/profile.d/golang.sh
+        mode: '0755'

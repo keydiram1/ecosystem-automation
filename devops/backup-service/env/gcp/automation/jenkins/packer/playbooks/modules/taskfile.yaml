@@ -1,0 +1,25 @@
+- name: Install Taskfile
+  block:
+    - name: Get latest Taskfile version
+      set_fact:
+        taskfile_latest_version: >-
+          {{ lookup('ansible.builtin.url', 'https://api.github.com/repos/go-task/task/releases/latest', split_lines=False)
+             | from_json
+             | json_query('tag_name') }}
+
+    - name: Download Taskfile .deb package
+      get_url:
+        url: "https://github.com/go-task/task/releases/download/{{ taskfile_latest_version }}/task_linux_{{ architecture_map[ansible_architecture] }}.deb"
+        dest: "/tmp/task_linux_{{ architecture_map[ansible_architecture] }}.deb"
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Install Taskfile deb package
+      apt:
+        deb: "/tmp/task_linux_{{ architecture_map[ansible_architecture] }}.deb"
+
+    - name: Remove Taskfile .deb package
+      file:
+        path: "/tmp/task_linux_{{ architecture_map[ansible_architecture] }}.deb"
+        state: absent

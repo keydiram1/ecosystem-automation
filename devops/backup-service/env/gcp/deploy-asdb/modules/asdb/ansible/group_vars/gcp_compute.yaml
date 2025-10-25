@@ -1,0 +1,13 @@
+ansible_ssh_args: >-
+  {% if lookup('ansible.builtin.env', 'CI') | bool %}
+  --zone={{ zone }} --no-user-output-enabled --quiet
+  {% else %}
+  --tunnel-through-iap --zone={{ zone }} --no-user-output-enabled --quiet
+  {% endif %}
+
+ansible_scp_extra_args: >-
+  {% if lookup('ansible.builtin.env', 'CI') | bool %}
+  --zone={{ zone }} --quiet
+  {% else %}
+  --tunnel-through-iap --zone={{ zone }} --quiet
+  {% endif %}

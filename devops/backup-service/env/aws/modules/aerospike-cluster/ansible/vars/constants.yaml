@@ -1,0 +1,87 @@
+# Downloading
+aerospike_download_suffix: "/artifact"
+
+aerospike_download_prefix: "http://www.aerospike.com/{{ 'enterprise/' if enterprise else ''}}download/server/"
+aerospike_edition: "{{ 'ee' if enterprise else 'ce' }}"
+
+download_url: "https://download.aerospike.com/artifacts/aerospike-server-enterprise/7.1.0/aerospike-server-enterprise_7.1.0.12_tools-11.0.2_amzn2023_x86_64.tgz"
+download_file_name: "aerospike-{{ aerospike_edition }}-{{ aerospike_distribution }}-{{ aerospike_version }}.tar"
+download_file_dir: "{{ temp_directory }}"
+download_path: "{{ download_file_dir }}/{{ download_file_name }}"
+
+tools_download_prefix: "https://download.aerospike.com/artifacts/aerospike-tools/{{ aerospike_tools_version }}/"
+tools_file_name: "aerospike-tools-{{ aerospike_tools_version }}-{{ aerospike_distribution }}.tgz"
+tools_download_url: "{{ tools_download_prefix}}{{ tools_file_name }}"
+tools_download_file_dir: "{{ temp_directory }}"
+tools_download_path: "{{ tools_download_file_dir }}/{{ tools_file_name }}"
+
+prometheus_exporter_download_prefix: "https://download.aerospike.com/artifacts/aerospike-prometheus-exporter/{{ prometheus_exporter_version }}/"
+prometheus_exporter_file_name: "aerospike-prometheus-exporter-{{ prometheus_exporter_version }}.tar.gz"
+prometheus_exporter_download_url: "{{ prometheus_exporter_download_prefix}}{{ prometheus_exporter_file_name }}"
+prometheus_exporter_download_file_dir: "{{ temp_directory }}"
+prometheus_exporter_download_path: "{{ prometheus_exporter_download_file_dir }}/{{ prometheus_exporter_file_name }}"
+
+# Names of files generated/used by the playbooks - leave as is
+# =======================================================
+scripts_directory_name: scripts
+aerospike_conf_file_name: aerospike.conf
+aerospike_yaml_file_name: aerospike.yaml
+ip_address_script_name: ip-address-list.sh
+quick_ssh_script_name: quick-ssh.sh 
+partition_script_name: partition-script.sh
+mount_drive_script_name: mount-drive-script.sh
+
+
+# Prometheus / Grafana
+prometheus_service_name: "prometheus.service"
+grafana_service_name: "grafana-server.service"
+prometheus_config_directory: /etc/prometheus
+
+# Feature key
+default_feature_key_path: "assets/features.conf"
+feature_key_path: "{{ feature_key if feature_key is defined else default_feature_key_path }}"
+
+# Encryption
+encryption_key_file_path: "/etc/aerospike/encryption-at-rest-key.dat"
+
+# TLS
+tls_name: "server.abs"
+secret_agent_tls_name: "secrets-tls"
+local_certs_directory: "assets/certificates/certs" 
+certificates_directory: "/etc/aerospike/certs"
+private_key_directory: "{{ certificates_directory }}/private"
+
+# Ports
+service_port: 3000
+fabric_port: 3001
+heartbeat_port: 3002
+info_port: 3003
+xdr_info_port: 3004
+secret_agent_port: 3005
+
+tls_service_port: 4333
+tls_fabric_port: 3011
+tls_heartbeat_port: 3012
+
+prometheus_exporter_port: 9145
+prometheus_app_port: 9090
+grafana_port: 4000
+
+spark_master_port: 7077
+spark_master_web_port: 8080
+spark_worker_web_port: 8081
+
+kafka_port: 9092
+zookeeper_clustering_port: 2888
+zookeeper_election_port: 3888
+zookeeper_client_port: 2181
+
+# Operating system identifiers
+ubuntu_os: "ubuntu20"
+amzn_linux_os: "amzn2023"
+
+## Private key
+#ansible_ssh_private_key_file: "{{ cluster_name }}.aws.pem"
+
+aerospike_service_name: "aerospike.service"
+temp_directory: "/tmp"

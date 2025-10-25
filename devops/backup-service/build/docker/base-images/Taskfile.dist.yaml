@@ -1,0 +1,11 @@
+version: '3'
+tasks:
+  create-builder:
+    cmds:
+      - cd ../ansible && ansible-playbook -i inventory/aws_ec2.yaml create-builder.yaml
+  destroy-builder:
+    cmds:
+      - cd ../ansible && ansible-playbook destroy-builder.yaml
+  build-base:
+    cmds:
+      - DOCKER_USERNAME="${DOCKER_USERNAME}" DOCKER_PASSWORD="${DOCKER_PASSWORD}" ./build.sh --channels dev --group default --tag "${TAG}" --tag-latest "${LATEST}"

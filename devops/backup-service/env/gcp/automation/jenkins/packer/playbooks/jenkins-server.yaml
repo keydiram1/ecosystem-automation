@@ -1,0 +1,16 @@
+- name: Install EcoEng Jenkins Server Dependencies
+  hosts: all
+  gather_facts: yes
+  become: yes
+
+  vars_files:
+    - "{{ playbook_dir }}/vars/vars.yaml"
+
+  tasks:
+    - include_tasks: "{{ playbook_dir }}/modules/core-tasks.yaml"
+    - include_tasks: "{{ playbook_dir }}/modules/jenkins-user.yaml"
+    - include_tasks: "{{ playbook_dir }}/modules/ubuntu-jenkins-group.yaml"
+    - include_tasks: "{{ playbook_dir }}/modules/google-ops-agent.yaml"
+    - include_tasks: "{{ playbook_dir }}/modules/python-venv.yaml"
+    - include_tasks: "{{ playbook_dir }}/modules/docker.yaml"
+    - include_tasks: "{{ playbook_dir }}/modules/cleanup.yaml"

@@ -1,0 +1,29 @@
+- name: Install snyk CLI tool
+  block:
+    - name: Get latest Snyk CLI release info
+      uri:
+        url: https://api.github.com/repos/snyk/cli/releases/latest
+        return_content: yes
+      register: github_snyk_response
+
+    - name: Download snyk-linux binary directly to /usr/local/bin/snyk
+      get_url:
+        url: "{{ github_snyk_response.json.assets | selectattr('name', 'equalto', 'snyk-linux') | map(attribute='browser_download_url') | first }}"
+        dest: /usr/local/bin/snyk
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Get latest snyk-to-html release info
+      uri:
+        url: https://api.github.com/repos/snyk/snyk-to-html/releases/latest
+        return_content: yes
+      register: github_snyk_to_html_response
+
+    - name: Download snyk-to-html-linux binary directly to /usr/local/bin/snyk-to-html
+      get_url:
+        url: "{{ github_snyk_to_html_response.json.assets | selectattr('name', 'equalto', 'snyk-to-html-linux') | map(attribute='browser_download_url') | first }}"
+        dest: /usr/local/bin/snyk-to-html
+        mode: '0755'
+        owner: root
+        group: root

@@ -1,0 +1,138 @@
+- name: Download Golang Aerospike Backup Service Project Dependencies
+  block:
+    - name: Git Clone Aerospike Backup Service Project
+      git:
+        repo: "https://{{ github_token }}@github.com/aerospike/aerospike-backup-service.git"
+        dest: "{{ ansible_env.HOME }}/aerospike-backup-service"
+        clone: yes
+        update: no
+        force: yes
+
+    - name: Initialize Sparse Checkout, Fetch Relevant Project Files, and Cache Golang Dependencies
+      shell: |
+        export GOMODCACHE="{{ ansible_env.HOME }}/.gomodcache"
+        export PATH="/usr/local/go/bin:$PATH"
+        git sparse-checkout init --cone --sparse-index
+        git sparse-checkout set --skip-checks 'go.mod'
+        git checkout
+        go mod download
+      args:
+        chdir: "{{ ansible_env.HOME }}/aerospike-backup-service"
+        executable: /bin/bash
+
+    - name: Create .gomodcache folder for Jenkins user
+      file:
+        path: /home/jenkins/.gomodcache
+        state: directory
+        mode: '0755'
+        owner: jenkins
+        group: jenkins
+
+    - name: Copy Downloaded dependencies under Jenkins user
+      copy:
+        src: "{{ ansible_env.HOME }}/.gomodcache/"
+        dest: /home/jenkins/
+        remote_src: yes
+        mode: '0755'
+        owner: jenkins
+        group: jenkins
+
+    - name: Delete .gomodcache folder
+      file:
+        path: "{{ ansible_env.HOME }}/.gomodcache"
+        state: absent
+
+    - name: Delete aerospike-backup-service project folder
+      file:
+        path: "{{ ansible_env.HOME }}/aerospike-backup-service"
+        state: absent
+
+- name: Download Golang Aerospike Backup CLI Project Dependencies
+  block:
+    - name: Git Clone Aerospike Backup CLI Project
+      git:
+        repo: "https://{{ github_token }}@github.com/aerospike/aerospike-backup-cli.git"
+        dest: "{{ ansible_env.HOME }}/aerospike-backup-cli"
+        clone: yes
+        update: no
+        force: yes
+
+    - name: Initialize Sparse Checkout, Fetch Relevant Project Files, and Cache Golang Dependencies
+      shell: |
+        export GOMODCACHE="{{ ansible_env.HOME }}/.gomodcache"
+        export PATH="/usr/local/go/bin:$PATH"
+        git sparse-checkout init --cone --sparse-index
+        git sparse-checkout set --skip-checks 'go.mod'
+        git checkout
+        go mod download
+      args:
+        chdir: "{{ ansible_env.HOME }}/aerospike-backup-cli"
+        executable: /bin/bash
+
+    - name: Create .gomodcache folder for Jenkins user
+      file:
+        path: /home/jenkins/.gomodcache
+        state: directory
+        mode: '0755'
+        owner: jenkins
+        group: jenkins
+
+    - name: Copy Downloaded dependencies under Jenkins user
+      copy:
+        src: "{{ ansible_env.HOME }}/.gomodcache/"
+        dest: /home/jenkins/
+        remote_src: yes
+        mode: '0755'
+        owner: jenkins
+        group: jenkins
+
+    - name: Delete .gomodcache folder
+      file:
+        path: "{{ ansible_env.HOME }}/.gomodcache"
+        state: absent
+
+    - name: Delete aerospike-backup-cli project folder
+      file:
+        path: "{{ ansible_env.HOME }}/aerospike-backup-cli"
+        state: absent
+
+- name: Download Golang Aerospike Backup Library Project Dependencies
+  block:
+    - name: Git Clone Aerospike Backup Library Project
+      git:
+        repo: "https://{{ github_token }}@github.com/aerospike/backup-go.git"
+        dest: "{{ ansible_env.HOME }}/backup-go"
+        clone: yes
+        update: no
+        force: yes
+
+    - name: Initialize Sparse Checkout, Fetch Relevant Project Files, and Cache Golang Dependencies
+      shell: |
+        export GOMODCACHE="{{ ansible_env.HOME }}/.gomodcache"
+        export PATH="/usr/local/go/bin:$PATH"
+        git sparse-checkout init --cone --sparse-index
+        git sparse-checkout set --skip-checks 'go.mod'
+        git checkout
+        go mod download
+      args:
+        chdir: "{{ ansible_env.HOME }}/backup-go"
+        executable: /bin/bash
+
+    - name: Append to existing .gomodcache for Jenkins user
+      copy:
+        src: "{{ ansible_env.HOME }}/.gomodcache/"
+        dest: /home/jenkins/
+        remote_src: yes
+        mode: '0755'
+        owner: jenkins
+        group: jenkins
+
+    - name: Delete .gomodcache folder
+      file:
+        path: "{{ ansible_env.HOME }}/.gomodcache"
+        state: absent
+
+    - name: Delete backup-go project folder
+      file:
+        path: "{{ ansible_env.HOME }}/backup-go"
+        state: absent

@@ -1,0 +1,115 @@
+def aersopikeSourceVersion64 = [string(name: 'asdb_version', value: '6.4.0.1')]
+def tlsEnabled = [booleanParam(name: 'tls_enabled', value: true)]
+def runDynamicConfiguration = [booleanParam(name: 'static_configuration', value: false)]
+def initConfig = [string(name: 'jfrog_repository_stage', value: params.'jfrog_repository_stage'),
+                  string(name: 'adr_image_version', value: params.'adr_image_version'),
+                  booleanParam(name: 'install_from_enterprise_backup_project', value: false)]
+
+pipeline {
+    agent none
+
+    parameters {
+        booleanParam(name: 'run_test_adr_57', defaultValue: true)
+        booleanParam(name: 'run_test_adr_64', defaultValue: true)
+        booleanParam(name: 'run_test_adr_queue_recover', defaultValue: true)
+        booleanParam(name: 'run_test_adr_ngative_tests', defaultValue: true)
+        booleanParam(name: 'run_test_adr_two_sources', defaultValue: true)
+        booleanParam(name: 'run_test_adr_recovery', defaultValue: true)
+        booleanParam(name: 'run_test_adr_TLS', defaultValue: true)
+        booleanParam(name: 'run_test_adr_static_config', defaultValue: true)
+        booleanParam(name: 'run_test_adr_dynamic_mode', defaultValue: true)
+        choice(name: 'jfrog_repository_stage', description: 'Set the repository stage you want to pull from', choices: ['dev', 'stage', 'prod'])
+        string(name: 'adr_image_version', defaultValue: 'latest', description: 'Replace the tag of the Jfrog-ADR images')
+        string(name: 'branch', defaultValue: 'master', description: 'The automation branch you want to run')
+    }
+
+    options {
+        timeout(time: 90, unit: 'MINUTES')
+    }
+
+    environment {
+        GITHUB_TOKEN = credentials('GITHUB_TOKEN')
+    }
+
+    stages {
+        stage('Run tests') {
+            parallel {
+                stage('Run test-adr-local Aerospike source version 5.7.0.31') {
+                    when {
+                        expression { return params.run_test_adr_57 }
+                    }
+                    steps {
+                        build job: "test-adr-local/${branch}", parameters: initConfig, propagate: true
+                    }
+                }
+                stage('Run test-adr-local Aerospike source version 6.4.0.1') {
+                    when {
+                        expression { return params.run_test_adr_64 }
+                    }
+                    steps {
+                        build job: "test-adr-local/${branch}", parameters: aersopikeSourceVersion64 + initConfig, propagate: true
+                    }
+                }
+                stage('Run test-adr-queue-recover-local') {
+                    when {
+                        expression { return params.run_test_adr_queue_recover }
+                    }
+                    steps {
+                        build job: "test-adr-queue-recover-local/${branch}", parameters: initConfig,propagate: true
+                    }
+                }
+                stage('Run test-adr-negative-tests-local') {
+                    when {
+                        expression { return params.run_test_adr_ngative_tests }
+                    }
+                    steps {
+                        build job: "test-adr-negative-tests-local/${branch}", parameters: initConfig, propagate: true
+                    }
+                }
+                stage('Run test-adr-two-sources-local') {
+                    when {
+                        expression { return params.run_test_adr_two_sources }
+                    }
+                    steps {
+                        build job: "test-adr-two-sources-local/${branch}", parameters: initConfig, propagate: true
+                    }
+                }
+                stage('Run test-adr-recovery-local') {
+                    when {
+                        expression { return params.run_test_adr_recovery }
+                    }
+                    steps {
+                        build job: "test-adr-recovery-local/${branch}",  parameters: initConfig,propagate: true
+                    }
+                }
+
+                stage('Run test-adr-local with TLS') {
+                    when {
+                        expression { return params.run_test_adr_TLS }
+                    }
+                    steps {
+                        build job: "test-adr-local/${branch}", parameters: tlsEnabled + initConfig, propagate: true
+                    }
+                }
+
+                stage('Run test-adr-static-config-local') {
+                    when {
+                        expression { return params.run_test_adr_static_config }
+                    }
+                    steps {
+                        build job: "test-adr-static-config-local/${branch}", parameters: initConfig, propagate: true
+                    }
+                }
+
+                stage('Run test-adr-local In Dynamic mode') {
+                    when {
+                        expression { return params.run_test_adr_dynamic_mode }
+                    }
+                    steps {
+                        build job: "test-adr-local/${branch}", parameters: runDynamicConfiguration + initConfig, propagate: true
+                    }
+                }
+            }
+        }
+    }
+}

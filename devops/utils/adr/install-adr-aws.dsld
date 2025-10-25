@@ -1,0 +1,64 @@
+def adrScriptPath = "/devops/run_tests/adr/AdrScript.groovy"
+def adrScript
+
+pipeline {
+    agent {
+        label "testAWS"
+    }
+
+    parameters {
+        choice(name: 'num_AS_source_clusters', choices: ['1', '2', '3', '4', '5'])
+        choice(name: 'num_AS_backup_clusters', choices: ['1', '2', '3', '4', '5'])
+        string(name: 'adr_version', description: 'Edit the ADR version in values.yml')
+        string(name: 'smdCompactIntervalSeconds', description: 'Edit smdCompactIntervalSeconds in values.yml')
+        string(name: 'queuePullingIntervalMs', description: 'Edit queuePullingIntervalMs in values.yml')
+        string(name: 'zombieRecoverIntervalMs', description: 'Edit zombieRecoverIntervalMs in values.yml')
+        string(name: 'recordRecoverThresholdMs', description: 'Edit recordRecoverThresholdMs in values.yml')
+        string(name: 'compactIntervalSeconds', description: 'Edit compactIntervalSeconds in values.yml')
+        string(name: 'deleteOldRecordsIntervalSeconds', description: 'Edit deleteOldRecordsIntervalSeconds in values.yml')
+        string(name: 'backupIntervalSeconds', description: 'Edit backupIntervalSeconds in values.yml')
+        string(name: 'xdrSchedulerIntervalMs', description: 'Edit xdrSchedulerIntervalMs in values.yml')
+        string(name: 'xdrSchedulerCheckLagIntervalMs', description: 'Edit xdrSchedulerCheckLagIntervalMs in values.yml')
+    }
+
+    options {
+        timeout(time: 60, unit: 'MINUTES')
+    }
+
+    environment {
+        GITHUB_TOKEN = credentials('GITHUB_TOKEN')
+    }
+
+    stages {
+        stage('Configure values.yaml') {
+            steps {
+                dir("/opt/automation/awsInstall") {
+                    script {
+                        sh 'rm -rf enterprise-backup || true'
+                        sh "git clone https://$GITHUB_TOKEN@github.com/citrusleaf/enterprise-backup.git"
+                        if (!params.adr_version.toString().isEmpty()) sh "sed -i 's/tag: \"latest\".*/tag: ${adr_version}/g' ./enterprise-backup/helm/aerospike-enterprise-backup/values.yaml"
+                        if (!params.smdCompactIntervalSeconds.toString().isEmpty()) sh "sed -i 's/smdCompactIntervalSeconds.*/smdCompactIntervalSeconds: ${smdCompactIntervalSeconds}/g' ./enterprise-backup/helm/aerospike-enterprise-backup/values.yaml"
+                        if (!params.queuePullingIntervalMs.toString().isEmpty()) sh "sed -i 's/queuePullingIntervalMs.*/queuePullingIntervalMs: ${queuePullingIntervalMs}/g' ./enterprise-backup/helm/aerospike-enterprise-backup/values.yaml"
+                        if (!params.zombieRecoverIntervalMs.toString().isEmpty()) sh "sed -i 's/zombieRecoverIntervalMs.*/zombieRecoverIntervalMs: ${zombieRecoverIntervalMs}/g' ./enterprise-backup/helm/aerospike-enterprise-backup/values.yaml"
+                        if (!params.recordRecoverThresholdMs.toString().isEmpty()) sh "sed -i 's/recordRecoverThresholdMs.*/recordRecoverThresholdMs: ${recordRecoverThresholdMs}/g' ./enterprise-backup/helm/aerospike-enterprise-backup/values.yaml"
+                        if (!params.compactIntervalSeconds.toString().isEmpty()) sh "sed -i 's/compactIntervalSeconds.*/compactIntervalSeconds: ${compactIntervalSeconds}/g' ./enterprise-backup/helm/aerospike-enterprise-backup/values.yaml"
+                        if (!params.deleteOldRecordsIntervalSeconds.toString().isEmpty()) sh "sed -i 's/deleteOldRecordsIntervalSeconds.*/deleteOldRecordsIntervalSeconds: ${deleteOldRecordsIntervalSeconds}/g' ./enterprise-backup/helm/aerospike-enterprise-backup/values.yaml"
+                        if (!params.backupIntervalSeconds.toString().isEmpty()) sh "sed -i 's/backupIntervalSeconds.*/backupIntervalSeconds: ${backupIntervalSeconds}/g' ./enterprise-backup/helm/aerospike-enterprise-backup/values.yaml"
+                        if (!params.xdrSchedulerIntervalMs.toString().isEmpty()) sh "sed -i 's/xdrSchedulerIntervalMs.*/xdrSchedulerIntervalMs: ${xdrSchedulerIntervalMs}/g' ./enterprise-backup/helm/aerospike-enterprise-backup/values.yaml"
+                        if (!params.xdrSchedulerCheckLagIntervalMs.toString().isEmpty()) sh "sed -i 's/xdrSchedulerCheckLagIntervalMs.*/xdrSchedulerCheckLagIntervalMs: ${xdrSchedulerCheckLagIntervalMs}/g' ./enterprise-backup/helm/aerospike-enterprise-backup/values.yaml"
+                    }
+                }
+            }
+        }
+
+        stage('Install ADR In AWS') {
+            steps {
+                dir("/opt/automation/awsInstall/enterprise-backup/scripts") {
+                    script {
+                        sh 'export TF_VAR_SourceClusterSize=${num_AS_source_clusters}; export TF_VAR_BackupClusterSize=${num_AS_backup_clusters}; export AWS_ADR_REGION="eu-central-1"; ./start-env.sh'
+                    }
+                }
+            }
+        }
+    }
+}

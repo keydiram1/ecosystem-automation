@@ -1,0 +1,19 @@
+version: '3'
+env:
+  PROJECT_ID: "ecosystem-connectors-data"
+tasks:
+  generate:
+    cmds:
+      - ./make-certificates.sh
+  upload:
+    cmds:
+      - ./upload-certificates.sh
+  delete:
+    cmds:
+      - ./delete-certificates.sh
+  get-secret:
+    cmds:
+      - gcloud secrets versions access latest --project "$PROJECT_ID" --secret {{ .CLI_ARGS }}
+  clean:
+    cmds:
+      - rm -rf certs input output

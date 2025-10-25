@@ -1,0 +1,36 @@
+
+project_id: "ecosystem-connectors-data"
+service_account: "automation-sa"
+user: "ubuntu"
+
+cluster_ip_addresses:
+  - localhost
+
+# Input vars
+prefix: "ecosys"
+workspace: "test"
+asdb_version: "7.0.0.20"
+version: "{{ asdb_version.split('.')[0] }}.{{ asdb_version.split('.')[1] }}.{{ asdb_version.split('.')[2] }}"
+asdb_tools_version: "11.1.1"
+distro: "ubuntu24.04"
+arch: "x86_64"
+device_type: "raw"
+secret_agent_address: "gateway.ecosys.internal"
+
+aerospike:
+  proto_fd_max: 200000
+  name: "{{ workspace }}-asdb"
+  tls_name: "asd.aerospike.com"
+
+  secret_agent_port: 3005
+  service_port_tls: 4333
+  service_port: 3000
+  heartbeat_port_tls: 3012
+  heartbeat_port: 3002
+  fabric_port: 3001
+  fabric_port_tls: 3011
+  info_port: 3003
+  namespaces: 30
+  mount_path: "/mnt/disks"
+  certs_dir: "/etc/ssl/certs/"
+  config_dir: "/etc/aerospike"

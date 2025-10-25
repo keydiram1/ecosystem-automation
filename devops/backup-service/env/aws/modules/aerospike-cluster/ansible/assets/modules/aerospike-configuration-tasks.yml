@@ -1,0 +1,151 @@
+- name: Get cluster ip addresses
+  set_fact:
+    cluster_ip_addresses: "{{ cluster_ip_addresses + [ hostvars[item].ansible_host ] }}"
+  with_items: 
+    "{{ groups[cluster_tag] }}"
+  vars:
+      cluster_ip_addresses: []
+  
+- block:
+  - name: "Get available nvme drives"
+    shell:
+      cmd: "ls /dev/nvme*p* | grep -v nvme0"
+    register: nvme_drives_list_output
+
+  - name: Store nvme drive list as a fact
+    set_fact: 
+      nvme_devices : "{{ nvme_drives_list_output.stdout_lines }}"    
+  when: not all_flash
+
+- block:
+  - name: "Get available nvme drives"
+    shell:
+      cmd: "ls /dev/nvme*p* | grep -v nvme0 | grep -v p1"
+    register: nvme_drives_list_output
+
+  - name: Store nvme drive list as a fact
+    set_fact: 
+      nvme_devices : "{{ nvme_drives_list_output.stdout_lines }}"
+
+  - name: "Get all flash device"
+    shell:
+      cmd: "ls /dev/nvme*p* | grep -v nvme0 | grep p1"
+    register: nvme_drives_list_output
+
+  - name: "Store all flash nvme drive list as a fact"
+    set_fact: 
+      all_flash_device : "{{ nvme_drives_list_output.stdout_lines }}"
+
+  - name: "Format and mount all flash device"
+    shell: |
+      set -e
+      all_flash_array=($(ls /dev/nvme*p* | grep -v nvme0 | grep p1))
+      for i in ${!all_flash_array[@]}
+      do
+        # Format device if not already formatted
+        if [ -z "$(lsblk -f ${all_flash_array[$i]} | grep xfs)" ]
+        then
+                mkfs.xfs -f ${all_flash_array[$i]}
+        fi
+        if [ ! -d /nvme_all_flash_${i} ]
+        then
+          mkdir /nvme_all_flash_${i}
+        fi
+        if [ ! "$(df -kh | grep ${all_flash_array[$i]} | grep nvme_all_flash_${i})" ]
+        then
+          mount ${all_flash_array[$i]} /nvme_all_flash_${i}
+        fi
+      done
+    args:
+      executable: /bin/bash      
+      
+  - name: "Get all flash device mount points"
+    shell:
+      cmd: "cat /proc/mounts | grep all_flash | awk '{print $2}'"
+    register: all_flash_list_output
+    
+  - name: Store all flash mount points as a fact
+    set_fact: 
+      all_flash_devices : "{{ all_flash_list_output.stdout_lines }}"
+
+  - name: "Get total all flash volume size"
+    shell:
+      cmd: "df -kh -BG | grep all_flash |  sed 's/G//' | awk '{sum=$2 -1}END{print sum}'"
+    register: all_flash_data_size
+
+  - name: Store all flash data size as a fact
+    set_fact: 
+      flash_data_size : "{{ all_flash_data_size.stdout_lines[0] }}"
+  when: all_flash
+
+- name: Copy configuration
+  template:
+    src: "assets/{{ aerospike_conf_file_name }}.j2"
+    dest: "/etc/aerospike/{{ aerospike_conf_file_name }}"
+    mode: '0644'
+    owner: root
+    group: root
+  vars:
+    ip_address: "{{ hostvars[inventory_hostname].ansible_host }}"
+
+- name: Set up log directory
+  file: 
+    path: "/var/log/aerospike"
+    state: directory    
+    owner: root
+    group: root
+    mode: 0755
+
+- block:
+  - name: Check whether encryption key exists already
+    stat:
+     path: "{{ encryption_key_file_path }}"
+    register: stat_encryption_key_file_path
+
+  - block:
+    - name: "Add key to key file {{ encryption_key_file_path }}"
+      shell: "head --bytes 256 /dev/urandom > {{ encryption_key_file_path }}"
+      become: yes
+      when: not stat_encryption_key_file_path.stat.exists
+
+    - name: "Secure key file {{ encryption_key_file_path }}"
+      file:
+        path: "{{ encryption_key_file_path }}"
+        owner: root
+        group: root
+        mode: 0400    
+      become: yes
+  when: encryption_at_rest
+
+- block:
+  - name: Make sure certificates & private key directories exist
+    file: 
+      path: "{{ item }}"
+      state: directory    
+      owner: root
+      group: root
+      mode: 0555
+    with_items:
+    - "{{ certificates_directory }}"
+    - "{{ private_key_directory }}"
+
+  - name: Copy certificates across
+    copy: 
+      src: "assets/certificates/certs/{{ item }}"
+      dest: "{{ certificates_directory }}"
+      owner: root
+      group: root
+      mode: 0444
+    with_items:
+    - ca.crt
+    - server.crt
+
+  - name: Copy private key across
+    copy: 
+      src: "assets/certificates/private/server.key"
+      dest: "{{ private_key_directory }}"
+      owner: root
+      group: root
+      mode: 0400
+
+  when: tls_enabled         

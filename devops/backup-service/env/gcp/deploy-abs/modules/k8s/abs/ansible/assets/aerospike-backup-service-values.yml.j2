@@ -1,0 +1,278 @@
+backupServiceConfig:
+  service:
+    logger:
+        level: INFO
+
+  aerospike-clusters:
+    absDefaultCluster:
+      label: "asd.aerospike.com"
+      seed-nodes:
+        - host-name: "{{ asdb_dns_name }}"
+          port: 4333
+          tls-name: "asd.aerospike.com"
+      credentials:
+        secret-agent-name: "absSecretAgent"
+        user: "tester"
+        password: "secrets:asdPsw:password-txt"
+      tls:
+        {#name: "asd.aerospike.com" required for mtls#}
+        ca-file: "/etc/aerospike-backup-service/ssl/ca.aerospike.com.pem"
+      max-parallel-scans: 5
+
+  secret-agents:
+    absSecretAgent:
+      connection-type: "tcp"
+      address: "{{ gateway_dns_name }}"
+      port: 3005
+      is-base64: true
+
+  storage:
+    backup-storage:
+{% if storage_provider == "gcp" %}
+      gcp-storage:
+        bucket-name: "{{ bucket_name }}"
+        path: "{{ random_path }}"
+{% elif storage_provider == "minio" %}
+      s3-storage:
+        s3-region: "eu-central-1"
+        s3-profile: "minio"
+        s3-endpoint-override: "{{ minio_dns_name }}"
+        bucket: "{{ bucket_name }}"
+        path: "{{ random_path }}"
+{% elif storage_provider == "s3" %}
+      s3-storage:
+        bucket: "{{ bucket_name }}"
+        path: "{{ random_path }}"
+        s3-region: "il-central-1"
+        s3-profile: "s3"
+{% elif storage_provider == "azure" %}
+      azure-storage:
+        endpoint: "https://{{ azure_storage_account }}.blob.core.windows.net"
+        container-name: "{{ bucket_name }}"
+        path: "{{ random_path }}"
+{% else %}
+      invalid-storage-provider: "Unsupported storage_provider: {{ storage_provider }}"
+{% endif %}
+
+{% if device_type == "raw" %}
+  backup-policies:
+    defaultPolicy:
+      parallel: 8
+      sealed: true
+
+  backup-routines:
+    performanceTest:
+      interval-cron: "@yearly"
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      namespaces:
+        - source-ns1
+      backup-policy: defaultPolicy
+
+{% elif device_type == "filesystem" %}
+  backup-policies:
+{#    xdrBackup:#}
+{#      parallel: 8#}
+{#      retention:#}
+{#        full: 10#}
+{#        incremental: 10#}
+{#      xdr:#}
+{#        local-host: "{{ module_name }}-{{ service_name }}.{{ terraform_workspace }}.svc.cluster.local"#}
+
+    encryptedCompressedSecretAgentPolicy:
+      parallel: 8
+      retention:
+        full: 1
+        incremental: 0
+      sealed: true
+      encryption:
+        key-secret: "secrets:encKey:encryption-key-pem"
+        mode: "AES256"
+      compression:
+        level: 20
+        mode: "ZSTD"
+
+    keepFilesMaxRecordsPolicy:
+      parallel: 8
+      sealed: true
+
+    defaultPolicy:
+      parallel: 8
+      sealed: true
+      with-cluster-configuration: true
+      retention:
+        full: 10
+        incremental: 10
+
+    withBandwidthLimit:
+      parallel: 8
+      bandwidth: 10
+      sealed: true
+
+    noIndexesUdfsRecords:
+      with-cluster-configuration: true
+      parallel: 8
+      no-indexes: true
+      no-records: true
+      no-udfs: true
+      retention:
+        full: 10
+
+  backup-routines:
+    minio:
+      interval-cron: "@yearly"
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      namespaces: ["source-ns4"]
+      backup-policy: keepFilesMaxRecordsPolicy
+
+    edgeCases:
+      interval-cron: "@yearly"
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      namespaces: ["source-ns7"]
+      backup-policy: defaultPolicy
+
+    filterBySetAndBin:
+      interval-cron: "@yearly"
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      namespaces: ["source-ns8"]
+      set-list: ["backupSet"]
+      bin-list: ["backupBin"]
+      backup-policy: defaultPolicy
+
+    localStorageIncremental3:
+      interval-cron: "@yearly"
+      incr-interval-cron: "*/10 * * * * *"
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      namespaces: ["source-ns10"]
+      backup-policy: defaultPolicy
+
+    fullBackup1:
+      interval-cron: "@yearly"
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      namespaces: ["source-ns9"]
+      backup-policy: defaultPolicy
+
+    fullBackup2:
+      interval-cron: "@yearly"
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      namespaces: ["source-ns11"]
+      backup-policy: defaultPolicy
+
+    fullBackup3:
+      interval-cron: "@yearly"
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      namespaces: ["source-ns12"]
+      backup-policy: defaultPolicy
+
+    timestamp:
+      interval-cron: "@yearly"
+      incr-interval-cron: "*/10 * * * * *"
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      namespaces: ["source-ns14"]
+      backup-policy: defaultPolicy
+
+    noIndexesUdfsRecords:
+       interval-cron: "@yearly"
+       source-cluster: absDefaultCluster
+       storage: backup-storage
+       namespaces: [ "source-ns19" ]
+       backup-policy: noIndexesUdfsRecords
+
+    fullBackupSlow:
+      interval-cron: "*/20 * * * * *"
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      namespaces: ["source-ns13"]
+      backup-policy: withBandwidthLimit
+
+    incrementalBackupCluster:
+      interval-cron: "@yearly"
+      incr-interval-cron: "*/30 * * * * *"
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      namespaces: []
+      backup-policy: defaultPolicy
+
+    incrementalBackupMultipleNSs:
+      interval-cron: "@yearly"
+      incr-interval-cron: "*/30 * * * * *"
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      namespaces: ["source-ns18", "source-ns19", "source-ns20"]
+      backup-policy: defaultPolicy
+
+    fullBackupFullCluster:
+      interval-cron: "@yearly"
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      namespaces: []
+      backup-policy: defaultPolicy
+
+    fullBackup3Namespaces:
+      interval-cron: "@yearly"
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      namespaces: ["source-ns15", "source-ns16", "source-ns17"]
+      backup-policy: defaultPolicy
+
+    fullBackup4:
+      interval-cron: "@yearly"
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      namespaces: ["source-ns21"]
+      backup-policy: defaultPolicy
+
+    fullBackup5:
+      interval-cron: "@yearly"
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      namespaces: ["source-ns22"]
+      backup-policy: defaultPolicy
+
+    fullBackup6:
+      interval-cron: "@yearly"
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      namespaces: ["source-ns23"]
+      backup-policy: defaultPolicy
+
+    fullBackupEncryptedCompressedSecretAgent:
+      interval-cron: "@yearly"
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      namespaces: ["source-ns2"]
+      backup-policy: encryptedCompressedSecretAgentPolicy
+      secret-agent: absSecretAgent
+
+    everySecondBackup:
+      interval-cron: "* * * * * *"
+      incr-interval-cron: ""
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      namespaces: ["source-ns20"]
+      backup-policy: defaultPolicy
+      disabled: true
+
+{#    xdrBackup:#}
+{#      interval-cron: "@yearly"#}
+{#      incr-interval-cron: "0 */1 * * * *"#}
+{#      source-cluster: absDefaultCluster#}
+{#      storage: backup-storage#}
+{#      namespaces: ["source-ns21"]#}
+{#      backup-policy: xdrBackup#}
+
+    performanceTest:
+      interval-cron: "@yearly"
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      namespaces: ["source-ns1"]
+      backup-policy: defaultPolicy
+{% endif %}

@@ -1,0 +1,24 @@
+- name: "Stop ASDB Cluster"
+  hosts: all
+  gather_facts: no
+  become: yes
+
+  vars_files:
+    - "{{ playbook_dir }}/vars/vars.yaml"
+  remote_user: "{{ user }}"
+  tasks:
+    - name: Refresh Inventory
+      meta: refresh_inventory
+
+    - name: "Wait for connection"
+      wait_for_connection:
+        timeout: 300
+
+    - name: Stop the aerospike service
+      service:
+        name: aerospike
+        state: stopped
+      register: service_stop_result
+      until: service_stop_result.status.ActiveState == "inactive"
+      retries: 5
+      delay: 60

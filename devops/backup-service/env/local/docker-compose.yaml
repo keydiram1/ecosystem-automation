@@ -1,0 +1,96 @@
+version: "3.9"
+services:
+
+  minio:
+    image: minio/minio:RELEASE.2023-10-16T04-13-43Z.fips
+    container_name: minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    expose:
+      - "9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    environment:
+      - "MINIO_ROOT_USER=minioadmin"
+      - "MINIO_ROOT_PASSWORD=minioadmin"
+    command: server /data/ --console-address :9001
+    networks:
+      - svc
+      - kind-network
+
+  minio-client:
+    image: minio/mc
+    container_name: minio-client
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      /usr/bin/mc mb myminio/as-backup-bucket;
+      /usr/bin/mc mb myminio/config;
+      /usr/bin/mc cp /etc/config/config.yaml myminio/config/config.yaml;
+      /usr/bin/mc anonymous set public myminio/config;
+      /usr/bin/mc anonymous set public myminio/as-backup-bucket;
+      exit 0;
+      "
+    volumes:
+      - ./backup-config:/etc/config
+    networks:
+      - svc
+      - kind-network
+
+  aero-cluster:
+    image: aerospike/aerospike-server-enterprise:6.2.0.7
+    container_name: "aero-cluster"
+    command: --config-file /etc/aerospike/aerospike.conf
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+      - "3002:3002"
+      - "3003:3003"
+    volumes:
+      - ./aerospike/etc/aerospike:/etc/aerospike
+      - ./aerospike/var/log/aerospike:/var/log/aerospike
+      - ./aerospike/run/aerospike:/var/run/aerospike
+      - ./aerospike/opt/data:/opt/aerospike/data
+      - ./aerospike/usr/udf/lua:/opt/aerospike/usr/udf/lua
+    healthcheck:
+      test: [ "CMD", "asinfo", "-U", "admin", "-P", "admin", "-p", "3000", "-v", "build" ]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - kind-network
+      - svc
+
+  source-client:
+    image: aerospike/aerospike-tools:8.1.0
+    container_name: "source-client"
+    depends_on:
+      aero-cluster:
+        condition: service_healthy
+    command: [
+      "asadm",
+      "-U", "admin",
+      "-P", "admin",
+      "-e", 'enable; manage acl create user tester password psw roles truncate sindex-admin user-admin data-admin read-write read write read-write-udf sys-admin udf-admin',
+      "--no-config-file",
+      "-h", "aero-cluster",
+      "-p", "3000"
+    ]
+    networks:
+      - svc
+      - kind-network
+
+networks:
+  svc:
+    name: svc
+  kind-network:
+    external: true
+    name: kind
+    

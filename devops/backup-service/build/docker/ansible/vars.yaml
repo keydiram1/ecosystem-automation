@@ -1,0 +1,22 @@
+key_name: ec2_key
+region: eu-central-1
+vpc_id: vpc-aee788c4
+subnet_id: subnet-f8560092
+remote_user: ubuntu
+tags:
+  group: abs-base-image-builder
+  project: ADR
+volume_size: 20
+builder_arm64:
+  name: builder-arm64
+#  name: arm64-based-builder
+  type: t4g.xlarge
+  platform: "linux/arm64"
+builder_amd64:
+  name: builder-amd64
+  type: t2.xlarge
+  platform: "linux/amd64"
+
+docker_builder_name: "abs-docker-builder"
+
+

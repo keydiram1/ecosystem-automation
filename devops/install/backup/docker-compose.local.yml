@@ -1,0 +1,127 @@
+version: '3.9'
+
+services:
+  compactor:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - ADR_SERVICE_NAME=compactor
+    volumes:
+      - ${PWD}/docker/compactor-config.yml:/etc/config/config.yml
+    ports:
+      - 8085:8080
+
+  queue-handler:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - ADR_SERVICE_NAME=queue-handler
+    volumes:
+      - ${PWD}/docker/queue-handler-config.yml:/etc/config/config.yml
+    ports:
+      - 8083:8080
+
+  rest-backend:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      ADR_SERVICE_NAME: 'rest-backend'
+      # Aerospike Backup Cluster
+      AEROSPIKE_BACKUP_HOST: 'host.docker.internal'
+      AEROSPIKE_BACKUP_PORT: 3004
+      AEROSPIKE_BACKUP_CATALOGNAMESPACE: catalog
+      # Aerospike XDR Proxy
+      AEROSPIKE_XDR_PROXY_HOST: 'host.docker.internal'
+      AEROSPIKE_XDR_PROXY_TLSNAME: 'xdr.proxy.client'
+      AEROSPIKE_XDR_PROXY_PORT: 8082
+      # Storage Provider
+      AEROSPIKE_REST_BACKEND_STORAGEPROVIDERURI: 'http://storage-provider:8081'
+      # JWT Authentication
+      SECURITY_JWT_SERVICE_USER: adr
+      SECURITY_JWT_SERVICE_PASSWORD: adrpwd
+      # Config
+      AEROSPIKE_BACKUP_MAXCOMMANDSINPROCESS: 10
+      AEROSPIKE_BACKUP_MAXCOMMANDSINQUEUE: 10000
+      AEROSPIKE_REST_BACKEND_CLIENTPOLICY_MAXCONNSPERNODE: 300
+      AEROSPIKE_REST_BACKEND_BACKGROUNDJOBPOLICY_RECORDSBATCHSIZE: 100
+      AEROSPIKE_REST_BACKEND_BACKGROUNDJOBPOLICY_PARALLELISM: 4
+      AEROSPIKE_REST_BACKEND_CIRCUITBREAKERCONFIGURATION_SLIDINGWINDOWSIZE: 10
+      AEROSPIKE_REST_BACKEND_AUTHENTICATORURI: 'http://authenticator:8087'
+      AEROSPIKE_REST_BACKEND_AUTH_ENABLED: 'true'
+      AEROSPIKE_REST_BACKEND_DYNAMICXDRMODE: 'false'
+      AEROSPIKE_REST_BACKEND_RETRYINTERVALMS: 1000
+      AEROSPIKE_REST_BACKEND_MAXRETRYATTEMPTS: 6
+    ports:
+      - 8080:8080
+
+  smd-handler:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - ADR_SERVICE_NAME=smd-handler
+    volumes:
+      - ${PWD}/docker/smd-handler-config.yml:/etc/config/config.yml
+    ports:
+      - 8084:8080
+
+  storage-provider:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      ADR_SERVICE_NAME: 'storage-provider'
+      SERVER_PORT: 8081
+      # Service configuration
+      STORAGE_PROVIDER: AWS_S3
+      STORAGE_CONTAINERNAME: 'as-backup-bucket'
+      # AWS S3
+      AMAZON_S3_ACCESSKEY: minioadmin
+      AMAZON_S3_SECRETKEY: minioadmin
+      AMAZON_S3_SERVICEENDPOINT: 'http://host.docker.internal:9000'
+      AEROSPIKE_STORAGE_PROVIDER_AUTHENTICATORURI: 'http://authenticator:8087'
+      AEROSPIKE_STORAGE_PROVIDER_AUTH_ENABLED: 'true'
+    ports:
+      - 8081:8081
+
+  authenticator:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      ADR_SERVICE_NAME: 'authenticator'
+      SERVER_PORT: 8087
+      AEROSPIKE_AUTH_RESTBACKENDURI: 'http://rest-backend:8080'
+      AEROSPIKE_AUTH_ENABLEAUTH: 'true'
+    ports:
+      - 8087:8087
+
+  xdr-scheduler:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - ADR_SERVICE_NAME=xdr-scheduler
+    volumes:
+      - ${PWD}/docker/xdr-scheduler-config.yml:/etc/config/config.yml
+    ports:
+      - 8086:8080
+
+  xdr-transformer:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - ADR_SERVICE_NAME=xdr-transformer
+    volumes:
+      - ${PWD}/docker/pwd.txt:/opt/aerospike-xdr-proxy/pwd.txt
+      - ${PWD}/docker/xdr-proxy-host.docker.internal.yml:/etc/aerospike-xdr-proxy/aerospike-xdr-proxy.yml
+    ports:
+      - 8082:8082
+
+  prometheus:
+    volumes:
+      - ${PWD}/docker/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - 9090:9090

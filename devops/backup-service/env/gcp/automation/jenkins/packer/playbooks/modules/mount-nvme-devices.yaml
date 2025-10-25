@@ -1,0 +1,69 @@
+- name: Mount NVMe Devices
+  block:
+    - name: List of NVMe devices
+      find:
+        file_type: link
+        paths: /dev/
+        recurse: true
+        patterns: "^google-local-nvme-ssd-*"
+        use_regex: yes
+      register: nvme_devices
+
+    - name: Iterate over NVMe devices
+      include_tasks: "{{ playbook_dir }}/modules/mount-fs-tasks.yaml"
+      loop: "{{ nvme_devices.files }}"
+      loop_control:
+        index_var: idx
+
+- name: Create Mount Boot Script
+  block:
+    - name: Create NVMe disk setup script
+      copy:
+        dest: /opt/setup-nvme-disks.sh
+        mode: '0755'
+        owner: root
+        group: root
+        content: |
+          #!/bin/bash
+          idx=0
+          for device in $(find /dev/ -type l -regex ".*/google-local-nvme-ssd-.*"); do
+              mount_path="/mnt/disks/data-${idx}"
+              mkfs.ext4 -F "$device"
+              mkdir -p "$mount_path"
+              mount "$device" "$mount_path"
+              chmod a+w "$mount_path"
+              echo "$device $mount_path ext4 discard,defaults,nofail 0 2" >> /etc/fstab
+              ((idx++))
+          done
+
+    - name: Create systemd service for mounting NVMe SSD disks
+      copy:
+        dest: /etc/systemd/system/mount-nvme-disks.service
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          [Unit]
+          Description=Mount NVMe SSD disks
+          DefaultDependencies=no
+          Before=docker.service
+          Wants=network-online.target
+          After=network.target network-online.target
+    
+          [Service]
+          Type=oneshot
+          ExecStart=/opt/setup-nvme-disks.sh
+          RemainAfterExit=true
+    
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable mount-nvme-disks service to run at boot
+      systemd:
+        name: mount-nvme-disks.service
+        enabled: yes
+        state: stopped

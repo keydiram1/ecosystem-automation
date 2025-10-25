@@ -1,0 +1,10 @@
+plugin: amazon.aws.aws_ec2
+regions:
+  - "{{ aws_region }}"
+
+filters:
+  tag:Name: "{{ cluster_name }}-*"
+  instance-state-name: [running, pending]
+keyed_groups:
+  - key: tags.ClusterName
+    separator: ''

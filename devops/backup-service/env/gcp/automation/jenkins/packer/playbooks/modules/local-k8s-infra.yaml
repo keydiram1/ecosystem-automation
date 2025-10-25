@@ -1,0 +1,139 @@
+- name: Install local k8s infrastructure
+  block:
+    - name: Install Python Kubernetes Library
+      apt:
+        update_cache: yes
+        name:
+          - python3-kubernetes
+
+    - name: KinD config
+      copy:
+        dest: /tmp/kind-cluster.yaml
+        content: |
+          kind: Cluster
+          apiVersion: kind.x-k8s.io/v1alpha4
+          nodes:
+            - role: control-plane
+              extraMounts:
+                - hostPath: {{ host_mount_path }}
+                  containerPath: {{ container_mount_path }}
+
+
+    - name: Create KinD Cluster
+      command: kind create cluster --name abs-cluster --config /tmp/kind-cluster.yaml
+
+    - name: Switch to KinD Context
+      command: kubectl config use-context kind-abs-cluster
+
+    - name: Patch ConfigMap local-path-config in local-path-storage namespace
+      k8s:
+        state: patched
+        kind: ConfigMap
+        name: local-path-config
+        namespace: local-path-storage
+        definition:
+          data:
+            config.json: "{{ {'nodePathMap': [{'node': 'DEFAULT_PATH_FOR_NON_LISTED_NODES', 'paths': [container_mount_path]}]} | to_json }}"
+
+    - name: Apply StorageClass
+      k8s:
+        state: present
+        definition:
+          apiVersion: storage.k8s.io/v1
+          kind: StorageClass
+          metadata:
+            name: ssd-local-path
+          provisioner: rancher.io/local-path
+          parameters:
+            nodePath: "{{ container_mount_path }}"
+            pathPattern: "{% raw %}{{ .PVC.Namespace }}/{{ .PVC.Name }}{% endraw %}"
+          volumeBindingMode: WaitForFirstConsumer
+          reclaimPolicy: Delete
+
+    - name: Get pods with label app=olm-operator in namespace olm
+      k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: olm
+        label_selectors:
+          - app=olm-operator
+      register: olm_operator_pods
+
+    - name: Check olm version on a single pod (first pod only)
+      kubernetes.core.k8s_exec:
+        namespace: olm
+        pod: "{{ olm_operator_pods.resources[0].metadata.name }}"
+        command: "olm --version"
+      when: olm_operator_pods.resources | length > 0
+      register: olm_version
+
+    - name: Get latest OLM version from GitHub API
+      set_fact:
+        olm_version: "{{ lookup('ansible.builtin.url', 'https://api.github.com/repos/operator-framework/operator-lifecycle-manager/releases/latest', split_lines=False) 
+              | from_json 
+              | json_query('tag_name') }}"
+
+    - name: Install OLM
+      block:
+        - name: Download OLM Installation Script
+          get_url:
+            url: https://github.com/operator-framework/operator-lifecycle-manager/releases/download/{{ olm_version }}/install.sh
+            dest: /tmp/install-olm.sh
+            owner: root
+            group: root
+            mode: '0755'
+
+        - name: Install OLM
+          command: /tmp/install-olm.sh {{ olm_version }}
+      when: olm_version.stdout is not defined or olm_version.stdout | length == 0
+
+    - name: Deploying Aerospike Kubernetes Operator (AKO)...
+      block:
+
+        - name: Install Aerospike Kubernetes Operator (AKO)
+          k8s:
+            state: present
+            definition: "{{ lookup('url', 'https://operatorhub.io/install/aerospike-kubernetes-operator.yaml',split_lines=false) }}"
+            wait: true
+
+        - name: Create Aerospike namespace
+          k8s:
+            state: present
+            definition:
+              apiVersion: v1
+              kind: Namespace
+              metadata:
+                name: aerospike
+
+        - name: Create service account for Aerospike Operator Controller Manager
+          k8s:
+            state: present
+            namespace: aerospike
+            definition:
+              apiVersion: v1
+              kind: ServiceAccount
+              metadata:
+                name: aerospike-operator-controller-manager
+
+        - name: Create cluster role binding for Aerospike Operator
+          k8s:
+            state: present
+            definition:
+              apiVersion: rbac.authorization.k8s.io/v1
+              kind: ClusterRoleBinding
+              metadata:
+                name: aerospike-cluster
+              subjects:
+                - kind: ServiceAccount
+                  name: aerospike-operator-controller-manager
+                  namespace: aerospike
+              roleRef:
+                kind: ClusterRole
+                name: aerospike-cluster
+                apiGroup: rbac.authorization.k8s.io
+
+        - name: Uninstall Python Kubernetes Library
+          apt:
+            name:
+              - python3-kubernetes
+            state: absent

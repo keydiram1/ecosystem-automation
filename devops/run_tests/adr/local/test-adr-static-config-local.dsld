@@ -1,0 +1,67 @@
+def adrScriptPath = "/devops/run_tests/adr/AdrScript.groovy"
+def adrScript
+
+pipeline{
+
+    agent {
+        label "AllSlaves"
+    }
+    parameters{
+        booleanParam(name: 'reinstall_adr', defaultValue: true)
+        booleanParam(name: 'static_configuration', defaultValue: true)
+        choice(name: 'parallel_classes', description: 'How many test classes to run in parallel', choices: ['30', '1', '2', '3'])
+        choice(name: 'asdb_version', description: 'Set the version of the Aerospike images', choices: ['5.7.0.31', 'latest', '6.1.0.19', '6.4.0.1'])
+        choice(name: 'aerospike_backup_image_version', description: 'Set the version of the Aerospike images', choices: ['6.4.0.1', '6.1.0.19', 'latest'])
+        choice(name: 'jvm_suspend', description: 'JVM Suspend For Remote Debug', choices: ['n', 'y'])
+        string(name: 'adr_image_version', defaultValue: 'latest', description: 'Replace the tag of the Jfrog-ADR images')
+        choice(name: 'jfrog_repository_stage', description: 'Set the repository stage you want to pull from', choices: ['dev', 'stage', 'prod'])
+        booleanParam(name: 'install_from_enterprise_backup_project', defaultValue: false, description: 'Images will be created from the entersprise-backup project')
+        booleanParam(name: 'delete_enterprise_backup_images', defaultValue: true, description: 'if install_from_enterprise_backup_project=true it will delete the old images')
+        string(name: 'enterprise_backup_branch', defaultValue: 'main', description: 'The enterprise-backup branch you want to install from. Will be used only when install_from_enterprise_backup_project=true')
+        booleanParam(name: 'tls_enabled', defaultValue: false)
+    }
+    options {
+        timeout(time: 1, unit: 'HOURS')
+        buildDiscarder(logRotator(numToKeepStr: '10', daysToKeepStr: '30'))
+    }
+
+    environment {
+        GITHUB_TOKEN = credentials('GITHUB_TOKEN')
+    }
+
+    stages {
+        stage('Uninstall ADR') {
+            when {
+                expression { return params.reinstall_adr }
+            }
+            steps {
+                script {
+                    adrScript = load pwd() + adrScriptPath
+                    adrScript.uninstall()
+                }
+            }
+        }
+        stage('Install ADR') {
+            when {
+                expression { return params.reinstall_adr }
+            }
+            steps {
+                script {
+                    dir("./devops/install/backup/conf/slave") {
+                        sh 'echo  "\nINSTALL_3_NODES_SOURCE_CLUSTER=true" >> .env'
+                    }
+                    adrScript.install()
+                }
+            }
+        }
+
+        stage('Run Backup tests') {
+            steps {
+                script{
+                    adrScript = load pwd() + adrScriptPath
+                    adrScript.runMvnIntegrationTest("ADR-E2E-STATIC")
+                }
+            }
+        }
+    }
+}

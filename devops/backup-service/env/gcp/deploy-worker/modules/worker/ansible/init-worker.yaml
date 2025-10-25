@@ -1,0 +1,114 @@
+- name: "Initialize ASDB Worker"
+  hosts: all
+  gather_facts: no
+  become: yes
+
+  vars_files:
+    - "{{ playbook_dir }}/vars/vars.yaml"
+  remote_user: "{{ user }}"
+  tasks:
+    - name: Refresh Inventory
+      meta: refresh_inventory
+
+    - name: "Wait for connection"
+      wait_for_connection:
+        timeout: 300
+
+    - block:
+        - name: "Get TLS Root CA"
+          google.cloud.gcp_secret_manager:
+            name: "ca-aerospike-com-pem"
+            state: present
+            project: "{{ project_id }}"
+            auth_kind: "application"
+          delegate_to: localhost
+          run_once: true
+          become: no
+          register: ca_aerospike_com_pem
+
+        - name: "Copy TLS Root CA"
+          copy:
+            dest: "{{ certs_dir }}ca.aerospike.com.pem"
+            content: "{{ ca_aerospike_com_pem.value }}"
+            mode: "0644"
+            owner: "root"
+            group: "root"
+
+    - block:
+        - name: "List of NVMe devices"
+          find:
+            file_type: link
+            paths: /dev/
+            recurse: yes
+            patterns: "^google-local-nvme-ssd-.*"
+            use_regex: yes
+          register: nvme_devices
+
+        - name: "Create a volume group"
+          lvg:
+            vg: vg.backup
+            pvs: "{{ nvme_devices.files | map(attribute='path') | list }}"
+            pvresize: true
+            state: active
+
+        - name: "Extend the logical volume to consume all remaining space in the volume group"
+          lvol:
+            vg: vg.backup
+            lv: lv.backup
+            size: +100%FREE
+
+        - name: "Format the NVMe device as xfs"
+          filesystem:
+            fstype: xfs
+            dev: /dev/vg.backup/lv.backup
+
+        - name: "Create the mount directory"
+          file:
+            path: "/mnt/backup"
+            state: directory
+            mode: 'a+x'
+
+        - name: "Mount the NVMe to the directory"
+          mount:
+            src: /dev/vg.backup/lv.backup
+            path: "/mnt/backup"
+            fstype: xfs
+            state: mounted
+      when: devices > 0
+
+    - name: "Git Clone Aerospike Backup CLI"
+      git:
+        repo: "https://{{ lookup('ansible.builtin.env', 'GITHUB_TOKEN') }}@github.com/aerospike/aerospike-backup-cli.git"
+        dest: "/home/{{ user }}/aerospike-backup-cli"
+        clone: yes
+        update: no
+        force: yes
+        refspec: '+refs/heads/*:refs/remotes/origin/*'
+      when: clone_backup_cli_repo | bool
+
+    - name: "Git Clone Aerospike Backup Service"
+      git:
+        repo: "https://github.com/aerospike/aerospike-backup-service.git"
+        dest: "/home/{{ user }}/aerospike-backup-service"
+        clone: yes
+        update: no
+        force: yes
+        refspec: '+refs/heads/*:refs/remotes/origin/*'
+      when: clone_backup_service_repo | bool
+
+    - name: "Git Clone Aerospike Backup Library"
+      git:
+        repo: "https://github.com/aerospike/backup-go.git"
+        dest: "/home/{{ user }}/aerospike-backup-tools"
+        clone: yes
+        update: no
+        force: yes
+        refspec: '+refs/heads/*:refs/remotes/origin/*'
+      when: clone_backup_library_repo | bool
+
+    - name: "Enable and Start Google Cloud Ops Agent Service"
+      systemd_service:
+        name: google-cloud-ops-agent
+        enabled: true
+        state: started
+      when: ops_agent | bool

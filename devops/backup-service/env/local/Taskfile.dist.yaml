@@ -1,0 +1,16 @@
+version: '3'
+tasks:
+  apply:
+    cmds:
+      - ./create.sh --config ./aerospike.conf --features-conf ./features.conf
+  destroy:
+    cmds:
+      - ./destroy.sh
+  clean:
+    cmds:
+      - rm -r ./kind/.terraform
+      - rm -r ./k8s/.terraform
+      - rm ./kind/.terraform.lock.hcl
+      - rm ./k8s/.terraform.lock.hcl
+      - rm ./kind/terraform.tfstate
+      - rm ./k8s/terraform.tfstate

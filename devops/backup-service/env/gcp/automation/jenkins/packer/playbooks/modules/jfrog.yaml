@@ -1,0 +1,19 @@
+- name: Install JFrog CLI
+  block:
+    - name: Add JFrog PPA repository
+      deb822_repository:
+        name: jfrog
+        types: deb
+        uris: https://releases.jfrog.io/artifactory/jfrog-debs
+        suites: focal
+        components: contrib
+        architectures: "{{ architecture_map[ansible_architecture] }}"
+        enabled: yes
+        signed_by: https://releases.jfrog.io/artifactory/api/v2/repositories/jfrog-debs/keyPairs/primary/public
+        state: present
+
+    - name: Install JFrog CLI
+      apt:
+        name: jfrog-cli-v2-jf
+        state: present
+        update_cache: yes

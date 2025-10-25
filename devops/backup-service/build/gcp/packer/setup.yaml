@@ -1,0 +1,57 @@
+- name: Install Worker Dependencies
+  hosts: all
+  gather_facts: yes
+  become: yes
+  vars:
+    deb_architecture:
+      "aarch64": "arm64"
+      "x86_64": "amd64"
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        upgrade: yes
+      ignore_errors: True
+    - name: Install required packages
+      apt:
+        pkg:
+          - ca-certificates
+          - curl
+    - name: Add Docker's official GPG key
+      apt_key:
+        url: "https://download.docker.com/{{ ansible_system | lower }}/{{ ansible_distribution | lower }}/gpg"
+        state: present
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb [arch={{ [ansible_architecture] | map('extract', deb_architecture) | first }}] https://download.docker.com/{{ ansible_system | lower }}/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable"
+        state: present
+        filename: docker
+    - name: Update apt cache after adding Docker repository
+      apt:
+        update_cache: yes
+    - name: Install Docker packages
+      apt:
+        pkg:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+    - name: Allow all to use docker without sudo
+      group:
+        name: docker
+        state: present
+    - name: Add ubuntu to docker group
+      user:
+        name: ubuntu
+        groups: docker
+        append: true
+#      file:
+#        path: /var/run/docker.sock
+#        mode: '0666'
+    - name: Remove useless packages from the cache
+      apt:
+        autoclean: yes
+    - name: Remove dependencies that are no longer required
+      apt:
+        autoremove: yes

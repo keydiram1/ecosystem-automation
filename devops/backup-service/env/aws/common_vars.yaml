@@ -1,0 +1,50 @@
+workspace: "test"
+region: "eu-central-1"
+aerospike:
+  enabled: true
+  name: "abs-cluster"
+  size: 1
+  version: "7.1.0.2"
+  instance_type: "m5dn.xlarge"
+s3:
+  enabled: true
+  buckets: 1
+  access_point: false
+  bucket_name: "backup-bucket"
+eks:
+  enabled: true
+  version: "1.28"
+  enable_irsa: true
+  groups:
+    - node_group_name: "group1"
+      ami_type: "AL2_x86_64"
+      capacity_type: "ON_DEMAND"
+      instance_types:
+        - "c4.2xlarge"
+      scaling_config:
+        max_size: 25
+        desired_size: 3
+        min_size: 1
+      labels:
+        Name: "abs-eks-nodegtoup1"
+k8s:
+  aerospike:
+    k8s_namespace: "aerospike"
+    backup_service:
+      enabled: true
+      version: "latest"
+    secret_manager:
+      enabled: true
+      version: "1.2.2"
+  autoscaler:
+    enabled: true
+    chart_version: "9.34.1"
+    version: "v1.28.2"
+  metric_server:
+    enabled: true
+    chart_version: "3.10.0"
+  csi_ebs_driver:
+    enabled: true
+  istio:
+    enabled: true
+    chart_version: "1.20.1"

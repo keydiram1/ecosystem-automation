@@ -1,0 +1,25 @@
+gcp_project_id: "{{ lookup('env', 'PROJECT_ID') }}"
+gcp_region: "europe-west4"
+gcp_vm_name_amd64: "image-builder-amd64"
+gcp_vm_name_arm64: "image-builder-arm64"
+gcp_vm_size: 100
+gcp_vm_user: "ubuntu"
+#    zone: "me-west1-a"
+gcp_zone: "{{ gcp_region }}-a"
+gcp_service_account_file: "{{ lookup('env', 'LOCAL_GSA_FILE') }}"
+gcp_auth_kind: "application"
+gcp_network_name: "image-builder"
+gcp_source_image_family_arm64: "ubuntu-2404-lts-arm64"
+gcp_source_image_family_amd64: "ubuntu-2404-lts-amd64"
+gcp_machine_type_amd64: "e2-standard-2"
+gcp_machine_type_arm64: "t2a-standard-2"
+deb_architecture:
+  "aarch64": "arm64"
+  "x86_64": "amd64"
+docker_builder_name: "abs-docker-builder"
+builder_arm64:
+  name: builder-arm64
+  platform: "linux/arm64"
+builder_amd64:
+  name: builder-amd64
+  platform: "linux/amd64"

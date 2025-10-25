@@ -1,0 +1,81 @@
+include:
+  - docker-compose-reportportal.yml
+services:
+  jenkins:
+    labels:
+      - "traefik.http.routers.jenkins.rule=PathPrefix(`/jenkins`)"
+      - "traefik.http.routers.jenkins.service=jenkins"
+      - "traefik.http.services.jenkins.loadbalancer.server.port=8080"
+      - "traefik.http.services.jenkins.loadbalancer.server.scheme=http"
+      - "traefik.expose=true"
+    image: aerospike.jfrog.io/ecosystem-container-dev-local/ecosys-jenkins-server:latest
+    logging:
+      driver: "json-file"
+      options:
+        max-size: 100m
+        max-file: 2
+    container_name: jenkins
+    environment:
+      JAVA_OPTS: -Djenkins.install.runSetupWizard=false -Dfile.encoding=UTF-8 -Duser.timezone=Asia/Jerusalem -Dpermissive-script-security.enabled=true
+      PROJECT_ID: ${PROJECT_ID}
+      REGION: ${REGION}
+      ZONE: ${ZONE}
+      CASC_JENKINS_CONFIG: ${CASC_JENKINS_CONFIG}
+      SA_KEY: ${SA_KEY}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      GITHUB_USERNAME: ${GITHUB_USERNAME}
+    command:
+      - --prefix=/jenkins
+    ports:
+      - "5000:5000"
+    volumes:
+      - ${PWD}/scripts:/usr/share/jenkins/ref/init.groovy.d
+      - ${PWD}/jcasc.yaml:/usr/share/jenkins/jenkins.yaml:ro
+      - /mnt/data/jenkins-data:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+      - ${DOCKER}:/usr/bin/docker:ro
+      - /mnt/data/db:/data
+      - ${PWD}/scriptler/scripts:/var/jenkins_home/scriptler/scripts
+    user: jenkins
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/jenkins/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - reportportal
+
+  healthz:
+    labels:
+      - "traefik.http.routers.healthz.rule=PathPrefix(`/healthz`)"
+      - "traefik.http.routers.healthz.service=healthz"
+      - "traefik.http.services.healthz.loadbalancer.server.port=8080"
+      - "traefik.http.services.healthz.loadbalancer.server.scheme=http"
+      - "traefik.expose=true"
+    image: hashicorp/http-echo:1.0
+    logging:
+      driver: "json-file"
+      options:
+        max-size: 5m
+        max-file: 1
+    restart: always
+    container_name: healthz
+    command:
+      - "-text=healthz"
+      - "-listen=:8080"
+    networks:
+      - reportportal
+
+  job-executor:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM eu.gcr.io/google.com/cloudsdktool/google-cloud-cli:debian_component_based
+        RUN apt-get update -qqy && \
+            apt-get upgrade -qqy && \
+            apt-get install -y --no-install-recommends certbot && \
+            rm -rf /var/lib/apt/lists/*
+    image: job-executor:latest
+    profiles:
+      - build-only

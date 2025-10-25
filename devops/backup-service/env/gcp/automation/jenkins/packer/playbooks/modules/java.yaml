@@ -1,0 +1,8 @@
+- name: Install OpenJDK
+  block:
+    - name: Install OpenJDK 21 headless without recommended packages
+      apt:
+        name: openjdk-21-jdk-headless
+        state: present
+        install_recommends: no
+        update_cache: yes

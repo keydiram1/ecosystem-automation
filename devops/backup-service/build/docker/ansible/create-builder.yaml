@@ -1,0 +1,419 @@
+- name: Create Builder
+  hosts: localhost
+  gather_facts: yes  # This is important to collect host architecture information
+  vars_files:
+    - vars.yaml
+  tasks:
+    - name: Look up for arm64 based AMI
+      ec2_ami_info:
+        region: "{{ region }}"
+        filters:
+          "tag:Name": "{{ builder_arm64.name }}"
+          root-device-type: ebs
+          virtualization-type: hvm
+      register: ami_info_arm64
+
+    - name: Set Arm64 AMI ID
+      set_fact:
+        ami_arm64: "{{ ami_info_arm64 }}"
+      when: ami_info_arm64.images | length > 0
+
+    - name: Create Arm64 based AMI
+      command: packer build -var "ami_name={{ builder_arm64.name }}" -var "subnet_id={{ subnet_id }}" -var "project={{ tags.name }}" ../packer/builder-arm64.pkr.hcl
+      register: async_result_arm64
+      async: 3600
+      poll: 0
+      when: ami_info_arm64.images | length == 0
+
+    - name: Look up for amd64 based AMI
+      ec2_ami_info:
+        region: "{{ region }}"
+        filters:
+          "tag:Name": "{{ builder_amd64.name }}"
+          root-device-type: ebs
+          virtualization-type: hvm
+      register: ami_info_amd64
+
+    - name: Set Amd64 AMI ID
+      set_fact:
+        ami_amd64: "{{ ami_info_amd64 }}"
+      when: ami_info_amd64.images | length > 0
+
+    - name: Create Amd64 based AMI
+      command: packer build -var "ami_name={{ builder_amd64.name }}" -var "subnet_id={{ subnet_id }}" -var "project={{ tags.name }}" ../packer/builder-amd64.pkr.hcl
+      register: async_result_amd64
+      async: 3600
+      poll: 0
+      when: ami_info_amd64.images | length == 0
+
+    - block:
+      - name: Check the status of Arm64 based AMI creation
+        async_status:
+          jid: "{{ async_result_arm64.ansible_job_id }}"
+        register: job_result_arm64
+        until: job_result_arm64.finished
+        retries: 360
+        delay: 10
+
+      - name: Print Arm64 packer build output
+        debug:
+          msg: "{{ job_result_arm64.stdout }}"
+
+      - name: Look up for arm64 based AMI
+        ec2_ami_info:
+          region: "{{ region }}"
+          filters:
+            "tag:Name": "{{ builder_arm64.name }}"
+            root-device-type: ebs
+            virtualization-type: hvm
+        register: new_ami_info_arm64
+      when: ami_info_arm64.images | length == 0
+
+    - block:
+        - name: Check the status of Amd64 based AMI creation
+          async_status:
+            jid: "{{ async_result_amd64.ansible_job_id }}"
+          register: job_result_amd64
+          until: job_result_amd64.finished
+          retries: 360
+          delay: 10
+
+        - name: Print Amd64 packer build output
+          debug:
+            msg: "{{ job_result_amd64.stdout }}"
+
+        - name: Look up for amd64 based AMI
+          ec2_ami_info:
+            region: "{{ region }}"
+            filters:
+              "tag:Name": "{{ builder_amd64.name }}"
+              root-device-type: ebs
+              virtualization-type: hvm
+          register: new_ami_info_amd64
+      when: ami_info_amd64.images | length == 0
+
+    - name: Set Arm64 AMI variable
+      set_fact:
+        ami_arm64: "{{ new_ami_info_arm64 }}"
+      when: ami_arm64 is not defined
+
+    - name: Set Amd64 AMI variable
+      set_fact:
+        ami_amd64: "{{ new_ami_info_amd64 }}"
+      when: ami_amd64 is not defined
+
+    - name: Print Arm64 based AMI ID
+      debug:
+        msg: "Arm64 based AMI ID is {{ ami_arm64.images[0].image_id }}"
+
+    - name: Print Amd64 based AMI ID
+      debug:
+        msg: "Amd64 based AMI ID is {{ ami_amd64.images[0].image_id }}"
+
+    - name: Get VPC info
+      ec2_vpc_net_info:
+        region: "{{ region }}"
+        filters:
+          "vpc-id": "{{ vpc_id }}"
+      register: vpc_info
+
+    - name: Print the default VPC ID
+      debug:
+        msg: "The default VPC ID is {{ vpc_info.vpcs[0].id }}"
+
+    - name: Get the first subnet ID of the VPC
+      ec2_vpc_subnet_info:
+        filters:
+          vpc-id: "{{ vpc_info.vpcs[0].id }}"
+
+      register: subnet_info
+    - name: Print the first subnet ID
+      debug:
+        msg: "The first subnet in VPC is {{ subnet_info.subnets[0].subnet_id }}"
+
+    - name: Create security group
+      ec2_group:
+        name: builder-sg
+        description: "builder security group"
+        region: "{{ region }}"
+        vpc_id: "{{ vpc_info.vpcs[0].id }}"
+        rules:
+          - proto: tcp
+            ports:
+              - 22
+            cidr_ip: 0.0.0.0/0
+          - proto: tcp
+            ports:
+              - 80
+            cidr_ip: 0.0.0.0/0
+          - proto: tcp
+            ports:
+              - 443
+            cidr_ip: 0.0.0.0/0
+        tags:
+          Name: "{{ tags.group }}"
+          Project: "{{ tags.project }}"
+      register: sg_info
+
+    - name: Print the Security Group ID
+      debug:
+        msg: "The new security group ID is {{ sg_info.group_id }}"
+
+    - name: Create a new EC2 key pair
+      ec2_key:
+        name: "{{ key_name }}"
+        region: "{{ region }}"
+        # If you want to override an existing key, set this to 'yes'
+        force: no
+      register: ec2_key
+
+    - name: Save private key to local file
+      copy:
+        content: "{{ ec2_key.key.private_key }}"
+        dest: "./{{ key_name }}.pem"
+        mode: 0400
+      when: ec2_key.changed
+
+    - name: Check for existing Arm64 EC2 instance
+      ec2_instance_info:
+        filters:
+          "tag:Name": "{{ builder_arm64.name }}"
+          instance-state-name: [ "running", "stopped" ]
+        region: "{{ region }}"
+      register: ec2_arm64_instances
+
+    - name: Launch Arm64 EC2 instance
+      ec2_instance:
+        key_name: "{{ key_name }}"
+        instance_type: "{{ builder_arm64.type }}"
+        image_id: "{{ ami_arm64.images[0].image_id | string }}"
+        count: 1
+        wait: yes
+        wait_timeout: 600
+        security_group: "{{ sg_info.group_id }}"
+        vpc_subnet_id: "{{ subnet_info.subnets[0].subnet_id }}"
+        region: "{{ region }}"
+        volumes:
+          - device_name: /dev/sda1
+            ebs:
+              volume_size: "{{ volume_size }}"
+              delete_on_termination: true
+        tags:
+          Name: "{{ builder_arm64.name }}"
+          Project: "{{ tags.project }}"
+          Group: "{{ tags.group }}"
+      async: 3600
+      poll: 0
+      register: async_ec2_arm64
+      when: ec2_arm64_instances.instances | length == 0
+
+    - name: Check for existing Amd64 EC2 instance
+      ec2_instance_info:
+        filters:
+          "tag:Name": "{{ builder_amd64.name }}"
+          instance-state-name: [ "running", "stopped" ]
+        region: "{{ region }}"
+      register: ec2_amd64_instances
+
+    - name: Launch Amd64 EC2 instance
+      ec2_instance:
+        key_name: "{{ key_name }}"
+        instance_type: "{{ builder_amd64.type }}"
+        image_id: "{{ ami_amd64.images[0].image_id | string }}"
+        count: 1
+        wait: yes
+        wait_timeout: 600
+        security_group: "{{ sg_info.group_id }}"
+        vpc_subnet_id: "{{ subnet_info.subnets[0].subnet_id }}"
+        region: "{{ region }}"
+        volumes:
+          - device_name: /dev/sda1
+            ebs:
+              volume_size: "{{ volume_size }}"
+              delete_on_termination: true
+        tags:
+          Name: "{{ builder_amd64.name }}"
+          Project: "{{ tags.project }}"
+          Group: "{{ tags.group }}"
+      async: 3600
+      poll: 0
+      register: async_ec2_amd64
+      when: ec2_amd64_instances.instances | length == 0
+
+    - block:
+      - name: Check the status of Arm64 EC2 instance
+        async_status:
+          jid: "{{ async_ec2_arm64.ansible_job_id }}"
+        register: ec2_arm64_job_result
+        until: ec2_arm64_job_result.finished
+        retries: 360
+        delay: 10
+
+      - name: Print Arm64 EC2 instance-id
+        debug:
+          msg: "{{ ec2_arm64_job_result.instances[0].instance_id }}"
+
+      - name: Wait for Arm64 EC2 instance to be ready
+        ec2_instance_info:
+          instance_ids:
+            - "{{ ec2_arm64_job_result.instances[0].instance_id }}"
+          region: "{{ region }}"
+        register: ec2_arm64_instance
+        until: ec2_arm64_instance.instances[0].state.name == "running"
+        retries: 360
+        delay: 10
+      when: ec2_arm64_instances.instances | length == 0
+
+    - block:
+        - name: Check the status of Amd64 EC2 instance
+          async_status:
+            jid: "{{ async_ec2_amd64.ansible_job_id }}"
+          register: ec2_amd64_job_result
+          until: ec2_amd64_job_result.finished
+          retries: 360
+          delay: 10
+
+        - name: Print Amd64 EC2 instance-id
+          debug:
+            msg: "{{ ec2_amd64_job_result.instances[0].instance_id }}"
+
+        - name: Wait for Amd64 EC2 instance to be ready
+          ec2_instance_info:
+            instance_ids:
+              - "{{ ec2_amd64_job_result.instances[0].instance_id }}"
+            region: "{{ region }}"
+          register: ec2_amd64_instance
+          until: ec2_amd64_instance.instances[0].state.name == "running"
+          retries: 360
+          delay: 10
+      when: ec2_arm64_instances.instances | length == 0
+
+    - name: Refresh inventory to ensure it is up-to-date
+      meta: refresh_inventory
+
+- name: Wait for SSH connection
+  hosts: aws_ec2
+  vars_files:
+    - vars.yaml
+  vars:
+    ansible_ssh_private_key_file: "./{{ key_name }}.pem"
+  become: no
+  gather_facts: no
+  remote_user: "{{ remote_user }}"
+  tasks:
+    - name: Wait for connection
+      wait_for_connection:
+        delay: 10
+        sleep: 1
+
+- name: Config EC2 instances
+  hosts: aws_ec2
+  gather_facts: yes
+  vars_files:
+    - vars.yaml
+  vars:
+    ansible_ssh_private_key_file: "./{{ key_name }}.pem"
+  become: no
+  remote_user: "{{ remote_user }}"
+  tasks:
+    - name: Gather facts from localhost
+      setup:
+      delegate_to: localhost
+      run_once: true
+      register: localhost_facts
+    - name: Ensure SSH key pair is present
+      openssh_keypair:
+        path: "{{ localhost_facts.ansible_facts.ansible_env.HOME }}/.ssh/id_rsa"
+        state: present
+        size: 2048
+      register: ssh_key
+      delegate_to: localhost
+      run_once: true
+    - name: Wait for SSH connection
+      wait_for_connection:
+        delay: 5
+    - name: Copy SSH public key to remote server
+      authorized_key:
+        user: "{{ remote_user }}"
+        state: present
+        key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+    - name: Enable PermitUserEnvironment in sshd_config
+      become: yes
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PermitUserEnvironment\s+no'
+        line: 'PermitUserEnvironment yes'
+        state: present
+      notify: restart sshd
+    - name: Ensure /home/{{ remote_user }}/.ssh exists
+      become: yes
+      file:
+        path: /home/{{ remote_user }}/.ssh
+        state: directory
+        mode: '0700'
+        owner: "{{ remote_user }}"
+        group: "{{ remote_user }}"
+    - name: Ensure environment file exists
+      become: yes
+      file:
+        path: /home/{{ remote_user }}/.ssh/environment
+        state: touch
+        mode: '0600'
+        owner: "{{ remote_user }}"
+        group: "{{ remote_user }}"
+    - name: Set PATH in environment file if not present
+      become: yes
+      lineinfile:
+        path: /home/{{ remote_user }}/.ssh/environment
+        line: 'PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin'
+        create: no
+        state: present
+  handlers:
+    - name: restart sshd
+      become: yes
+      service:
+        name: sshd
+        state: restarted
+
+- name: Configure docker buildx builders
+  hosts: localhost
+  gather_facts: yes
+  vars_files:
+    - vars.yaml
+  tasks:
+    - name: Get Arm64 EC2 instance
+      ec2_instance_info:
+        region: "{{ region }}"
+        filters:
+          "tag:Name": "{{ builder_arm64.name }}"
+          instance-state-name: [ "running" ]
+      register: ec2_arm64_instances
+
+    - name: Get Amd64 EC2 instance
+      ec2_instance_info:
+        region: "{{ region }}"
+        filters:
+          "tag:Name": "{{ builder_amd64.name }}"
+          instance-state-name: [ "running" ]
+      register: ec2_amd64_instances
+
+    - name: Add Arm64 EC2 instance to known hosts
+      known_hosts:
+        name: "{{ ec2_arm64_instances.instances[0].public_ip_address }}"
+        key: "{{ lookup('pipe', 'ssh-keyscan {{  ec2_arm64_instances.instances[0].public_ip_address }}') }}"
+        hash_host: true
+
+    - name: Add Amd64 EC2 instance to known hosts
+      known_hosts:
+        name: "{{ ec2_amd64_instances.instances[0].public_ip_address }}"
+        key: "{{ lookup('pipe', 'ssh-keyscan {{  ec2_amd64_instances.instances[0].public_ip_address }}') }}"
+        hash_host: true
+
+    - name: Create buildx builder for Arm64
+      command: docker buildx create --driver docker-container --name "{{ docker_builder_name }}" --node "{{ builder_arm64.name }}" --platform "{{ builder_arm64.platform }}" --config builder-config.toml ssh://"{{ remote_user }}"@"{{ ec2_arm64_instances.instances[0].public_ip_address }}"
+
+    - name: Create buildx builder for Amd64
+      command: docker buildx create --driver docker-container --name "{{ docker_builder_name }}" --append --node "{{ builder_amd64.name }}" --platform "{{ builder_amd64.platform }}" --config builder-config.toml ssh://"{{ remote_user }}"@"{{ ec2_amd64_instances.instances[0].public_ip_address }}"
+
+    - name: Use buildx builder
+      command: docker buildx use "{{ docker_builder_name }}"

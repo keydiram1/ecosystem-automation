@@ -1,0 +1,37 @@
+prefix: "ecosys"
+
+gcp:
+  project_id: "ecosystem-connectors-data"
+  region: "me-west1"
+
+gke:
+  cluster_name: ecosys-gke
+  node_pools:
+    - pool_name: "main-pool"
+      machine_type: "e2-standard-4"
+      role_label: "main-node"
+      autoscaling:
+        min_size: "1"
+        max_size: "5"
+
+    - pool_name: "abs-pool"
+      machine_type: "e2-highcpu-16"
+      role_label: "abs-node"
+      autoscaling:
+        min_size: "0"
+        max_size: "5"
+
+    - pool_name: "aerospike-secret-agent-pool"
+      machine_type: "e2-small"
+      role_label: "aerospike-secret-agent"
+      autoscaling:
+        min_size: "1"
+        max_size: "1"
+
+k8s:
+  istio:
+    enabled: "true"
+  gateway:
+    namespace: aerospike
+  aerospike-secret-agent:
+    namespace: aerospike

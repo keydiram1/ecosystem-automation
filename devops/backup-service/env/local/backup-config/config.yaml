@@ -1,0 +1,27 @@
+---
+aerospike-cluster:
+  - name: "cluster1"
+    host: "aero-cluster"
+    port: 3000
+    user: "tester"
+    password_path: "/config/psw.txt"
+
+backup-storage:
+  - name: "minimal"
+    type: "aws-s3"
+    s3_endpoint_override: "http://minio:9000"
+    s3_region: "eu-central-1"
+    s3_profile: "minio"
+    path: "s3://as-backup-bucket/storage1"
+
+backup-policy:
+  - name: "policy-daily"
+    interval: 30000
+    incr_interval: 5000
+    type: "aws-s3"
+    source_cluster: "cluster1"
+    storage: "minimal"
+    namespace: "source-ns1"
+    parallel: 1
+    remove_files: false
+    

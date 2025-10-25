@@ -1,0 +1,8 @@
+- name: "Generate ASDB Configuration"
+  hosts: localhost
+  gather_facts: true
+  vars_files:
+    - "{{ playbook_dir }}/vars/vars.yaml"
+  tasks:
+    - name: "Create ASDB config"
+      import_tasks: "{{ playbook_dir }}/modules/generate-asdb-conf-tasks.yaml"

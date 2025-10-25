@@ -1,0 +1,18 @@
+- block:
+    - name: "Format the NVMe device as ext4"
+      filesystem:
+        fstype: ext4
+        dev: "{{ item.path }}"
+
+    - name: "Create the mount directory"
+      file:
+        path: "{{ minio.mount_path }}/data-{{ idx }}"
+        state: directory
+        mode: '0755'
+
+    - name: "Mount the NVMe to the directory"
+      mount:
+        src: "{{ item.path }}"
+        path: "{{ minio.mount_path }}/data-{{ idx }}"
+        fstype: ext4
+        state: mounted

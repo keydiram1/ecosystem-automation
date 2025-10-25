@@ -1,0 +1,10 @@
+workspace: test
+prefix: ecosys
+
+gcp:
+  project_id: "ecosystem-connectors-data"
+  region: "me-west1"
+
+jenkins:
+  enabled: true
+  machine_type: "e2-standard-4"

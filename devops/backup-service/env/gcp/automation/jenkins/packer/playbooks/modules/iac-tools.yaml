@@ -1,0 +1,81 @@
+- name: Install IAC tools
+  block:
+    - name: Install Terraform
+      block:
+        - name: Add HashiCorp PPA repository
+          deb822_repository:
+            name: hashicorp
+            types: deb
+            uris: https://apt.releases.hashicorp.com
+            suites: "{{ ansible_distribution_release }}"
+            components: main
+            architectures: "{{ architecture_map[ansible_architecture] }}"
+            enabled: yes
+            signed_by: https://apt.releases.hashicorp.com/gpg
+            state: present
+
+        - name: Install Terraform
+          apt:
+            update_cache: yes
+            name:
+              - terraform
+
+        - name: Ensure bash-completion directory exists
+          file:
+            path: /etc/bash_completion.d
+            state: directory
+            mode: '0755'
+
+        - name: Add terraform bash completion script
+          copy:
+            dest: /etc/bash_completion.d/terraform
+            content: "complete -C /usr/bin/terraform terraform"
+            owner: root
+            group: root
+            mode: '0644'
+
+        - name: Create terraform alias for all users
+          copy:
+            dest: /etc/profile.d/terraform_alias.sh
+            content: 'alias tf=terraform'
+            owner: root
+            group: root
+            mode: '0644'
+
+    - name: Install Terragrunt
+      block:
+        - name: Get latest Terragrunt version
+          set_fact:
+            terragrunt_latest_version: "{{ lookup('ansible.builtin.url', 'https://api.github.com/repos/gruntwork-io/terragrunt/releases/latest', split_lines=False) 
+              | from_json 
+              | json_query('tag_name') }}"
+
+        - name: Download and install Terragrunt
+          get_url:
+            url: "https://github.com/gruntwork-io/terragrunt/releases/download/{{ terragrunt_latest_version | urlencode }}/terragrunt_linux_{{ architecture_map[ansible_architecture] }}"
+            dest: /usr/local/bin/terragrunt
+            owner: root
+            group: root
+            mode: '0755'
+
+        - name: Ensure bash-completion directory exists
+          file:
+            path: /etc/bash_completion.d
+            state: directory
+            mode: '0755'
+
+        - name: Add terragrunt bash completion script
+          copy:
+            dest: /etc/bash_completion.d/terragrunt
+            content: "complete -C /usr/local/bin/terragrunt terragrunt"
+            owner: root
+            group: root
+            mode: '0644'
+
+        - name: Create terragrunt alias for all users
+          copy:
+            dest: /etc/profile.d/terragrunt_alias.sh
+            content: 'alias tr=terragrunt'
+            owner: root
+            group: root
+            mode: '0644'

@@ -1,0 +1,67 @@
+service:
+  user: root
+  group: root
+  pidfile: var/run/aerospike/asd.pid
+  proto-fd-max: {{ aerospike.proto_fd_max }}
+  cluster-name: asd.aerospike.com
+  secrets-address-port: "{{ aerospike.secret_agent }} {{ aerospike.secret_agent_port }}"
+  feature-key-file: secrets:featuresConf:features-conf
+
+security: {}
+
+logging:
+  - aggr: info
+    name: /var/log/aerospike/udf.log
+    udf: info
+  - any: info
+    name: /var/log/aerospike/aerospike.log
+
+network:
+  tls:
+    - name: {{ aerospike.tls_name }}
+      cert-file: secrets:asdCert:asd-aerospike-com-pem
+      key-file: secrets:asdKey:asd-aerospike-com-key
+      ca-file: {{ aerospike.certs_dir }}/ca.aerospike.com.pem
+  service:
+    tls-addresses:
+      - any
+    tls-port: {{ aerospike.service_port }}
+    tls-name: {{ aerospike.tls_name }}
+    tls-authenticate-client: false
+  heartbeat:
+    mode: mesh
+    port: {{ aerospike.heartbeat_port }}
+    mesh-seed-address-ports:
+      {%- for ip_address in cluster_ip_addresses +%}
+      - {{ ip_address }} {{ aerospike.heartbeat_port }}
+      {%- endfor +%}
+    interval: 150
+    timeout: 10
+  fabric:
+    addresses:
+      - any
+    port: {{ aerospike.fabric_port }}
+
+  info:
+    port: {{ aerospike.info_port }}
+
+namespaces:
+{% for i in range(aerospike.namespaces) %}
+  - name: source-ns{{ i + 1 }}
+    {%- if i + 1 == 7 +%}
+    max-record-size: 8388608
+    {%- endif +%}
+    replication-factor: 2
+    default-ttl: 2592000
+    nsup-period: 120
+    storage-engine:
+      type: device
+      files:
+        - {{ aerospike.mount_path }}/data-0/source-ns{{ i + 1 }}.dat
+      {%- if asdb_version is version('7.1.0.0',  operator='lt') and i + 1 == 7 +%}
+      write-block-size: 8388608
+      {%- elif i + 1 == 7 +%}
+      flush-size: 8388608
+      {%- endif +%}
+      filesize: 4294967296
+{% endfor %}

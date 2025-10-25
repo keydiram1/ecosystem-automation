@@ -1,0 +1,70 @@
+def backupBranch = [string(name: 'asbackup_branch', value: params.'asbackup_branch')]
+
+pipeline {
+    agent none
+
+    parameters {
+        booleanParam(name: 'run_test_cli_backup', defaultValue: true)
+        booleanParam(name: 'run_test_cli_backup_sequential', defaultValue: true)
+        booleanParam(name: 'run_test_cli_backup_c_to_go', defaultValue: true)
+        booleanParam(name: 'run_test_cli_backup_negative', defaultValue: true)
+
+        string(name: 'automation_branch', defaultValue: 'master', description: 'The Automation branch with the tests you want to run')
+        string(name: 'asbackup_branch', defaultValue: 'main', description: 'The CLI Backup branch you want to install from')
+    }
+
+    options {
+        timeout(time: 60, unit: 'MINUTES')
+    }
+
+    environment {
+        GITHUB_TOKEN = credentials('GITHUB_TOKEN')
+    }
+
+    stages {
+        stage('Run CLI backup tests') {
+            parallel {
+                stage('Run test_cli_backup') {
+                    when {
+                        expression { return params.run_test_cli_backup }
+                    }
+                    steps {
+                        build job: "test-cli-backup", wait: false, propagate: true
+                        sleep 20
+                        build job: "test-cli-backup/${automation_branch}", parameters: backupBranch, propagate: true
+                    }
+                }
+                stage('Run test_cli_backup_sequential') {
+                    when {
+                        expression { return params.run_test_cli_backup_sequential }
+                    }
+                    steps {
+                        build job: "test-cli-backup-sequential", wait: false, propagate: true
+                        sleep 20
+                        build job: "test-cli-backup-sequential/${automation_branch}", parameters: backupBranch, propagate: true
+                    }
+                }
+                stage('Run test-cli-backup-c-to-go') {
+                    when {
+                        expression { return params.run_test_cli_backup_c_to_go }
+                    }
+                    steps {
+                        build job: "test-cli-backup-c-to-go", wait: false, propagate: true
+                        sleep 20
+                        build job: "test-cli-backup-c-to-go/${automation_branch}", parameters: backupBranch, propagate: true
+                    }
+                }
+                stage('Run test_cli_backup_negative') {
+                    when {
+                        expression { return params.run_test_cli_backup_negative }
+                    }
+                    steps {
+                        build job: "test-cli-backup-negative", wait: false, propagate: true
+                        sleep 20
+                        build job: "test-cli-backup-negative/${automation_branch}", parameters: backupBranch, propagate: true
+                    }
+                }
+            }
+        }
+    }
+}

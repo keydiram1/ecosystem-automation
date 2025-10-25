@@ -1,0 +1,50 @@
+pipeline{
+
+    agent any
+    
+    parameters{
+         booleanParam(name: 'stop_intances', defaultValue: true)
+    }
+    
+    options {
+        timeout(time: 15, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '10', daysToKeepStr: '30'))
+    }
+
+    triggers { cron('30 20 * * *') }
+
+    stages {
+        stage('Stop AWS Instances') {
+            when {
+                    expression { return params.stop_intances }
+                }
+            steps {
+                script{
+                    // Stop Report Portal
+                    sh 'aws ec2 stop-instances --instance-ids $(aws ec2 describe-instances --filters "Name=tag:Name,Values=Report Portal" --query "Reservations[].Instances[].InstanceId" --output text)'
+
+                    // Stop Jenkins Worker 1
+                    sh 'aws ec2 stop-instances --instance-ids $(aws ec2 describe-instances --filters "Name=tag:Name,Values=Jenkins Worker 1" --query "Reservations[].Instances[].InstanceId" --output text)'
+
+                    // Stop Jenkins Worker 2
+                    sh 'aws ec2 stop-instances --instance-ids $(aws ec2 describe-instances --filters "Name=tag:Name,Values=Jenkins Worker 2" --query "Reservations[].Instances[].InstanceId" --output text)'
+
+                    // Stop Jenkins Worker 3
+                    sh 'aws ec2 stop-instances --instance-ids $(aws ec2 describe-instances --filters "Name=tag:Name,Values=Jenkins Worker 3" --query "Reservations[].Instances[].InstanceId" --output text)'
+                    
+                    // Stop Jenkins Server
+                    sh 'aws ec2 stop-instances --instance-ids $(aws ec2 describe-instances --filters "Name=tag:Name,Values=Jenkins Server" --query "Reservations[].Instances[].InstanceId" --output text)'
+                }
+            }
+        }
+    }
+    post {
+        failure {
+            mail from: 'Jenkins@aerospike.com',
+                    to: 'eram@aerospike.com, yrizhkov@aerospike.com, dgerchikov@aerospike.com',
+                    subject: "Job failed: ${env.JOB_NAME}",
+                    body: "Project: ${env.JOB_NAME} <br>Build Number: ${env.BUILD_NUMBER} <br> URL: https://3.122.67.127/",
+                    mimeType: 'text/html'
+        }
+    }
+}

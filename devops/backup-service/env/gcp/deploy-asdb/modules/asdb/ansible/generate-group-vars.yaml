@@ -1,0 +1,22 @@
+- name: Create Group Vars
+  hosts: localhost
+  tasks:
+    - name: Ensure group_vars directory exists
+      file:
+        path: "{{ playbook_dir }}//group_vars"
+        state: directory
+        mode: "0755"
+
+    - name: Create group_vars for ASDB instances
+      copy:
+        dest: "{{ playbook_dir }}/group_vars/{{ workspace | replace('-', '_') }}_{{ service_name }}_workspace_{{ workspace | replace('-', '_') }}.yaml"
+        content: |
+          ansible_python_interpreter: /usr/bin/python3
+        mode: "0644"
+
+    - name: Create group_vars for ASDB instances
+      copy:
+        dest: "{{ playbook_dir }}/group_vars/localhost.yaml"
+        content: |
+          ansible_python_interpreter: {{ local_interpreter }}
+        mode: "0644"

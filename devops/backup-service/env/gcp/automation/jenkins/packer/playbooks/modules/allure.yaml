@@ -1,0 +1,23 @@
+- name: Install Allure
+  block:
+    - name: Get Allure latest release version
+      uri:
+        url: https://api.github.com/repos/allure-framework/allure2/releases/latest
+        return_content: yes
+      register: github_allure_response
+
+    - name: Download Allure .deb package
+      get_url:
+        url: "{{ github_allure_response.json.assets | selectattr('name', 'match', '.*\\.deb$') | map(attribute='browser_download_url') | first }}"
+        owner: root
+        group: root
+        dest: /tmp/allure.deb
+
+    - name: Install Allure from .deb package
+      apt:
+        deb: /tmp/allure.deb
+
+    - name: Remove Allure .deb package
+      file:
+        path: /tmp/allure.deb
+        state: absent

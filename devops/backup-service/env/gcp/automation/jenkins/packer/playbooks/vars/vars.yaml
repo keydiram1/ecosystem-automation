@@ -1,0 +1,24 @@
+python_venv_location: /opt/python_venv/bin
+host_mount_path: /mnt/disks/data-0
+mount_path: /mnt/disks
+container_mount_path: /local-storage
+architecture_map:
+  "x86_64": "amd64"
+  "aarch64": "arm64"
+  "aarch": "arm64"
+  "armhf": "armhf"
+  "armv7l": "armhf"
+
+os_map:
+  "RedHat-9": "el9"
+  "Rocky-9": "el9"
+  "AlmaLinux-9": "el9"
+  "RedHat-8": "el8"
+  "Rocky-8": "el8"
+  "AlmaLinux-8": "el8"
+  "Debian-11": "debian11"
+  "Debian-12": "debian12"
+  "Amazon-2023": "amzn2023"
+  "Ubuntu-20": "ubuntu20.04"
+  "Ubuntu-22": "ubuntu22.04"
+  "Ubuntu-24": "ubuntu24.04"

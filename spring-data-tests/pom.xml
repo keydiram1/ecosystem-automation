@@ -1,0 +1,66 @@
+<?xml version="1.0"?>
+<project xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd" xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.aerospike</groupId>
+    <artifactId>automation-aerospike</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+  </parent>
+
+  <groupId>com.aerospike</groupId>
+  <artifactId>spring-data-tests</artifactId>
+  <version>1.0-SNAPSHOT</version>
+  <name>spring-data-tests</name>
+  <url>http://maven.apache.org</url>
+
+  <properties>
+    <spring-data-aerospike.version>5.1.1</spring-data-aerospike.version>
+    <spring-boot-starter-version>3.2.3</spring-boot-starter-version>
+    <spring-cloud-starter-bootstrap>4.1.0</spring-cloud-starter-bootstrap>
+    <embedded.aerospike.version>3.1.9</embedded.aerospike.version>
+    <spring.context.version>6.1.4</spring.context.version>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.aerospike</groupId>
+      <artifactId>spring-data-aerospike</artifactId>
+      <version>${spring-data-aerospike.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.playtika.testcontainers</groupId>
+      <artifactId>embedded-aerospike</artifactId>
+      <version>${embedded.aerospike.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-context</artifactId>
+      <version>${spring.context.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <version>${spring-boot-starter-version}</version>
+      <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.logging.log4j</groupId>
+          <artifactId>log4j-to-slf4j</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>ch.qos.logback</groupId>
+          <artifactId>logback-classic</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-starter-bootstrap</artifactId>
+      <version>${spring-cloud-starter-bootstrap}</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+</project>

@@ -1,0 +1,25 @@
+plugin: google.cloud.gcp_compute
+
+projects:
+  - "ecosystem-connectors-data"
+
+filters:
+  - status = RUNNING
+  - labels.name = "jenkins-server"
+
+auth_kind: application
+
+scopes:
+  - 'https://www.googleapis.com/auth/cloud-platform'
+  - 'https://www.googleapis.com/auth/compute.readonly'
+
+keyed_groups:
+  - prefix: gcp
+    key: labels
+
+hostnames:
+  - name
+use_extra_vars: true
+compose:
+  ansible_host: selfLink
+  ansible_python_interpreter: '"{{ \"/opt/python_venv/bin/python3" }}"'

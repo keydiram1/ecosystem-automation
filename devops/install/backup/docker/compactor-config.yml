@@ -1,0 +1,12 @@
+---
+backendUri: 'http://rest-backend:8080'
+compactIntervalSeconds: 5
+smdCompactIntervalSeconds: 10
+deleteOldRecordsIntervalSeconds: 5
+backendTimeoutMs: 2000
+authenticatorUri: 'http://authenticator:8087'
+auth:
+  enabled: true
+  tokenRefreshSeconds: 82800
+  username: "adr-compactor"
+  password: "adr-compactor-pwd"

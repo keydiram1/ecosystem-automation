@@ -1,0 +1,157 @@
+---
+- name: "Install and run Minio on GCP VM"
+  hosts: all
+  gather_facts: true
+  vars_files:
+    - "{{ playbook_dir }}/vars/vars.yaml"
+  remote_user: "{{ user }}"
+  become: yes
+  tasks:
+    - name: Refresh Inventory
+      meta: refresh_inventory
+
+    - name: "Wait for connection"
+      wait_for_connection:
+        delay: 10
+        sleep: 1
+
+    - name: "Update APT cache"
+      apt:
+        update_cache: yes
+
+    - name: "Install required dependencies"
+      apt:
+        name:
+          - curl
+          - wget
+          - apt-transport-https
+          - ca-certificates
+          - software-properties-common
+        state: present
+
+    - name: "List of NVMe devices"
+      find:
+        file_type: link
+        paths: /dev/
+        recurse: true
+        patterns: "^google-local-nvme-ssd-*"
+        use_regex: yes
+      register: nvme_devices
+
+    - name: "Iterate over NVMe devices"
+      include_tasks: "{{ playbook_dir }}/modules/mount_tasks.yaml"
+      loop: "{{ nvme_devices.files }}"
+      loop_control:
+        index_var: idx
+
+    - name: "Create system group minio-user"
+      group:
+        name: "minio-user"
+        system: yes
+
+    - name: "Create system user minio-user without home directory"
+      user:
+        name: "minio-user"
+        group: "minio-user"
+        system: yes
+        create_home: no
+
+    - name: "List Mounted Directories"
+      find:
+        paths: /mnt/disks
+        file_type: directory
+      register: mount_paths
+
+    - name: "Change ownership to minio-user:minio-user for all mount paths"
+      file:
+        path: "{{ item.path }}"
+        owner: "minio-user"
+        group: "minio-user"
+      with_items: "{{ mount_paths.files }}"
+
+    - name: "Download minio installation file"
+      get_url:
+        url: https://dl.min.io/server/minio/release/linux-amd64/archive/minio_20240826153307.0.0_amd64.deb
+        dest: /tmp/minio.deb
+
+    - name: "Install Minio"
+      apt:
+        deb: /tmp/minio.deb
+        state: present
+        update_cache: yes
+
+    - name: "Configure Minio service"
+      copy:
+        dest: /etc/systemd/system/minio.service
+        content: |
+          [Unit]
+          Description=MinIO
+          Documentation=https://min.io/docs/minio/linux/index.html
+          Wants=network-online.target
+          After=network-online.target
+          AssertFileIsExecutable=/usr/local/bin/minio
+
+          [Service]
+          WorkingDirectory=/usr/local
+
+          User=minio-user
+          Group=minio-user
+          ProtectProc=invisible
+
+          EnvironmentFile=-/etc/default/minio
+          ExecStartPre=/bin/bash -c "if [ -z \"${MINIO_VOLUMES}\" ]; then echo \"Variable MINIO_VOLUMES not set in /etc/default/minio\"; exit 1; fi"
+          ExecStart=/usr/local/bin/minio server $MINIO_OPTS $MINIO_VOLUMES
+
+          # MinIO RELEASE.2023-05-04T21-44-30Z adds support for Type=notify (https://www.freedesktop.org/software/systemd/man/systemd.service.html#Type=notify)
+          # This may improve systemctl setups where other services use `After=minio.server`
+          # Uncomment the line to enable the functionality
+          # Type=notify
+
+          # Let systemd restart this service always
+          Restart=always
+
+          # Specifies the maximum file descriptor number that can be opened by this process
+          LimitNOFILE=65536
+
+          # Specifies the maximum number of threads this process can create
+          TasksMax=infinity
+
+          # Disable timeout logic and wait until process is stopped
+          TimeoutStopSec=infinity
+          SendSIGKILL=no
+
+          [Install]
+          WantedBy=multi-user.target
+
+          # Built for ${project.name}-${project.version} (${project.name})
+
+    - name: "Set environment variables for Minio (Access and Secret keys)"
+      copy:
+        dest: /etc/default/minio
+        content: |
+          MINIO_ROOT_USER=minioadmin
+          MINIO_ROOT_PASSWORD=minioadmin
+          MINIO_VOLUMES="{{ mount_paths.files | map(attribute='path') | join(' ') }}"
+          MINIO_OPTS="--console-address :9001"
+
+    - name: "Reload systemd daemon"
+      systemd:
+        daemon_reload: yes
+
+    - name: "Enable and start Minio service"
+      systemd:
+        name: minio
+        enabled: yes
+        state: started
+
+    - name: "Download MinIO client binary"
+      get_url:
+        url: "https://dl.min.io/client/mc/release/linux-amd64/mc"
+        dest: "/bin/mc"
+        mode: '0755'
+
+    - name: "Create MinIO Alias"
+      command: mc alias set abs http://localhost:9000 minioadmin minioadmin
+
+    - name: "Create MinIO Bucket"
+      command: mc mb abs/abs-testing-bucket

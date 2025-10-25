@@ -1,0 +1,24 @@
+cluster_name: abs-cluster
+_groups_key: "{{ cluster_name | replace('-', '_') }}"
+enterprise: true
+encryption_at_rest: false
+tls_enabled: false
+strong_consistency: false
+all_flash: false
+file_system: true
+namespaces: 30
+mount_point: "/mnt/data"
+mount_drive_as_fs: true
+partitions_per_device: 1
+monitoring_enabled: false
+kafka_connect_enabled: false
+aerospike_version: "7.1.0.2"
+_version_list: "{{ aerospike_version.split('.') }}"
+aerospike_canonical_version: "{{ _version_list[0] }}.{{ _version_list[1] }}.0"
+aerospike_tools_version: "10.2.1"
+prometheus_exporter_version: "1.7.0"
+operating_system: "{{ amzn_linux_os }}"
+replication_factor: 2
+aerospike_mem_pct: 80
+aerospike_distribution: "{{ os_config['aerospike_distribution'] }}"
+remote_user: "{{ os_config['remote_user'] }}"

@@ -1,0 +1,95 @@
+pipeline {
+    agent {
+        label "AllSlaves"
+    }
+
+    parameters {
+        booleanParam(name: 'run_setup', defaultValue: true)
+        booleanParam(name: 'run_adr_build', defaultValue: true)
+        string(name: 'enterprise_backup_branch', defaultValue: 'main', description: 'The enterprise-backup branch you want to create the image from')
+        string(name: 'image_version', defaultValue: 'test-jenkins', description: 'Image version for the ADR images')
+        booleanParam(name: 'tag_latest', defaultValue: false, description: 'Tags the image also as latest')
+        choice(name: 'platforms', description: 'How many test classes to run in parallel', choices: ['linux/amd64,linux/arm64', 'linux/amd64', 'linux/arm64'])
+    }
+
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+    }
+
+    environment {
+        DOCKER_PASSWORD = credentials('DOCKER_PASSWORD')
+        GITHUB_TOKEN = credentials('GITHUB_TOKEN')
+    }
+
+    stages {
+        stage('Setup') {
+            when {
+                expression { return params.run_setup }
+            }
+            steps {
+                script {
+                    sh 'rm -rf /opt/automation/adrbuild || true'
+                    sh 'mkdir -p /opt/automation/adrbuild/adrMavenDependencies'
+
+                    dir("/opt/automation/adrbuild") {
+                        sh "git clone https://$GITHUB_TOKEN@github.com/citrusleaf/enterprise-backup.git"
+                    }
+                    dir("/opt/automation/adrbuild/enterprise-backup") {
+                        sh 'git checkout ${enterprise_backup_branch}'
+                    }
+                }
+            }
+        }
+
+        stage('Build Images for linux/amd64 and linux/arm64') {
+            when {
+                expression { return params.run_adr_build && params.platforms.equals('linux/amd64,linux/arm64') }
+            }
+            steps {
+                script {
+                    def buildShCommand = "./build.sh --tag ${image_version} --channels dev"
+                    if (params.tag_latest) {
+                        buildShCommand += " --tag-latest"
+                    }
+                    dir("/opt/automation/adrbuild/enterprise-backup") {
+                        sh "DOCKER_USERNAME=\"eram@aerospike.com\" DOCKER_PASSWORD=\"$DOCKER_PASSWORD\" ${buildShCommand} --platforms linux/amd64,linux/arm64"
+                    }
+                }
+            }
+        }
+
+        stage('Build Images for linux/amd64 only') {
+            when {
+                expression { return params.run_adr_build && params.platforms.equals('linux/amd64') }
+            }
+            steps {
+                script {
+                    def buildShCommand = "./build.sh --tag ${image_version} --channels dev"
+                    if (params.tag_latest) {
+                        buildShCommand += " --tag-latest"
+                    }
+                    dir("/opt/automation/adrbuild/enterprise-backup") {
+                        sh "DOCKER_USERNAME=\"eram@aerospike.com\" DOCKER_PASSWORD=\"$DOCKER_PASSWORD\" ${buildShCommand} --platforms linux/amd64"
+                    }
+                }
+            }
+        }
+
+        stage('Build Images for linux/arm64 only') {
+            when {
+                expression { return params.run_adr_build && params.platforms.equals('linux/arm64') }
+            }
+            steps {
+                script {
+                    def buildShCommand = "./build.sh --tag ${image_version} --channels dev"
+                    if (params.tag_latest) {
+                        buildShCommand += " --tag-latest"
+                    }
+                    dir("/opt/automation/adrbuild/enterprise-backup") {
+                        sh "DOCKER_USERNAME=\"eram@aerospike.com\" DOCKER_PASSWORD=\"$DOCKER_PASSWORD\" ${buildShCommand} --platforms linux/arm64"
+                    }
+                }
+            }
+        }
+    }
+}

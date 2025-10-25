@@ -1,0 +1,27 @@
+version: '3.9'
+
+services:
+  rest-backend:
+    environment:
+      # Enable TLS
+      # This docker compose will only be used when TLS is enabled in ecosytem-automation project
+      AEROSPIKE_REST_BACKEND_CLIENTPOLICY_TLSPOLICY_ENABLED: 'true'
+    volumes:
+      - ${PWD}/conf/tls/etc/pki/certs/backup/backup.ca.jks:/adr/conf/tls/etc/pki/certs/backup/backup.ca.jks
+      - ${PWD}/conf/tls/etc/pki/private/backup/backup.client.chain.p12:/adr/conf/tls/etc/pki/private/backup/backup.client.chain.p12
+      - ${PWD}/conf/tls/etc/pki/certs/source/source.ca.jks:/adr/conf/tls/etc/pki/certs/source/source.ca.jks
+      - ${PWD}/conf/tls/etc/pki/private/source/source.client.chain.p12:/adr/conf/tls/etc/pki/private/source/source.client.chain.p12
+      - ${PWD}/conf/tls/etc/pki/certs/xdrproxy/xdr.proxy.ca.jks:/adr/conf/tls/etc/pki/certs/xdrproxy/xdr.proxy.ca.jks
+
+  xdr-transformer:
+    volumes:
+      # Override xdr proxy .yml file with /tls xdr proxy .yml file
+      - ${PWD}/docker/tls/xdr-proxy-host.docker.internal.yml:/etc/aerospike-xdr-proxy/aerospike-xdr-proxy.yml
+      - ${PWD}/conf/tls/etc/pki/certs/xdrproxy/xdr.proxy.ca.jks:/adr/conf/tls/etc/pki/certs/xdrproxy/xdr.proxy.ca.jks
+      - ${PWD}/conf/tls/etc/pki/private/xdrproxy/xdr.proxy.client.chain.p12:/adr/conf/tls/etc/pki/private/xdrproxy/xdr.proxy.client.chain.p12
+      - ${PWD}/conf/tls/xdrproxy/xdr-proxy-tls-password-file.txt:/adr/conf/tls/xdrproxy/xdr-proxy-tls-password-file.txt
+      - ${PWD}/conf/tls/etc/pki/certs/backup/backup.ca.jks:/adr/conf/tls/etc/pki/certs/backup/backup.ca.jks
+      - ${PWD}/conf/tls/etc/pki/private/backup/backup.client.chain.p12:/adr/conf/tls/etc/pki/private/backup/backup.client.chain.p12
+      - ${PWD}/conf/tls/backup/backup-cluster-tls-password-file.txt:/adr/conf/tls/backup/backup-cluster-tls-password-file.txt
+      - ${PWD}/conf/tls/etc/pki/certs/source/source.ca.jks:/adr/conf/tls/etc/pki/certs/source/source.ca.jks
+      - ${PWD}/conf/tls/source/source-cluster-tls-password-file.txt:/adr/conf/tls/source/source-cluster-tls-password-file.txt

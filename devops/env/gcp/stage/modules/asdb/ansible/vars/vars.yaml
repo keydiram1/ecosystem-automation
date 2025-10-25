@@ -1,0 +1,32 @@
+
+project_id: "ecosystem-connectors-data"
+region: "me-west1"
+zone: "me-west1-a"
+service_account: "automation-sa"
+ansible_ssh_args: --tunnel-through-iap --zone={{ zone }} --no-user-output-enabled --quiet
+ansible_scp_extra_args: --tunnel-through-iap --zone={{ zone }} --quiet
+user: "ubuntu"
+
+
+# Input vars
+prefix: "ecosys"
+workspace: "test"
+asdb_version: "7.0.0.20"
+version: "{{ asdb_version.split('.')[0] }}.{{ asdb_version.split('.')[1] }}.{{ asdb_version.split('.')[2] }}"
+asdb_tools_version: "11.1.1"
+distro: "ubuntu24.04"
+arch: "x86_64"
+
+aerospike:
+  proto_fd_max: 200000
+  name: "{{ workspace }}-asdb"
+  tls_name: "asd.aerospike.com"
+  secret_agent: "gateway.{{ prefix }}.internal"
+  secret_agent_port: 3005
+  service_port: 4333
+  heartbeat_port: 3011
+  fabric_port: 3012
+  info_port: 3003
+  namespaces: 30
+  mount_path: "/mnt/disks"
+  certs_dir: "/etc/ssl/certs/"

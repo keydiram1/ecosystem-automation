@@ -1,0 +1,75 @@
+def absScriptPath = "/devops/run_tests/abs/AbsScript.groovy"
+def absScript
+
+pipeline {
+    agent {
+        label "${params.jenkins_slave}"
+    }
+
+    environment {
+        BASH_ENV = "/root/.profile"
+        GITHUB_TOKEN = credentials('GITHUB_TOKEN')
+    }
+
+    parameters {
+        booleanParam(name: 'install_environment', defaultValue: false)
+        booleanParam(name: 'run_tests', defaultValue: false)
+        booleanParam(name: 'uninstall_environment', defaultValue: false)
+
+        choice(name: 'load_level', description: 'The load level of the test', choices: ['low', 'high'])
+        string(name: 'automation_install_branch', defaultValue: 'master', description: 'The automation branch you want the installation to run from')
+        string(name: 'abs_version', defaultValue: 'tests', description: 'The version of the ABS image')
+        choice(name: 'number_of_nodes', description: 'How many nodes will be in the cluster', choices: ['3', '1', '4', '5'])
+        choice(name: 'parallel_classes', description: 'How many test classes to run in parallel', choices: ['30', '1', '2', '3'])
+        choice(name: 'jvm_suspend', description: 'JVM Suspend For Remote Debug', choices: ['n', 'y'])
+        choice(name: 'jenkins_slave', description: 'The slave that the job will run on', choices: ['AllSlaves', 'Slave1', 'Slave2', 'Slave3'])
+        choice(name: 'aws_env_workspace', description: 'The AWS environment workspace the tests should run on', choices: ['test', 'david'])
+    }
+
+    options {
+        timeout(time: 2, unit: 'HOURS')
+        buildDiscarder(logRotator(numToKeepStr: '20', daysToKeepStr: '60'))
+    }
+
+    stages {
+        stage('Install AWS Environment') {
+            when {
+                expression { return params.install_environment }
+            }
+            steps {
+                script {
+                    absScript = load pwd() + absScriptPath
+                    absScript.installAws()
+                }
+            }
+        }
+
+        stage('Run Backup tests') {
+            when {
+                expression { return params.run_tests }
+            }
+            steps {
+                script {
+                    absScript = load pwd() + absScriptPath
+                    if (params.install_environment) {
+                        echo 'Sleeping for 1 minute till the service will be ready for tests'
+                        sleep 60
+                    }
+                    absScript.runMvnIntegrationTestAWS("ABS-LOAD-TEST")
+                }
+            }
+        }
+
+        stage('Uninstall AWS Environment') {
+            when {
+                expression { return params.uninstall_environment }
+            }
+            steps {
+                script {
+                    absScript = load pwd() + absScriptPath
+                    absScript.uninstallAws()
+                }
+            }
+        }
+    }
+}

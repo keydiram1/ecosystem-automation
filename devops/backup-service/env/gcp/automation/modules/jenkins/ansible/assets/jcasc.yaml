@@ -1,0 +1,440 @@
+jenkins:
+  numExecutors: 10
+  scmCheckoutRetryCount: 5
+  systemMessage: |
+    EcoSys Jenkins Server
+  crumbIssuer:
+    standard:
+      excludeClientIPFromCrumb: true
+  globalNodeProperties:
+    - envVars:
+        env:
+          - key: LC_ALL
+            value: "C.UTF-8"
+          - key: PROJECT_ID
+            value: "${PROJECT_ID}"
+          - key: REGION
+            value: "${REGION}"
+          - key: ZONE
+            value: "${ZONE}"
+  clouds:
+    - docker:
+        name: "docker"
+        dockerApi:
+          dockerHost:
+            uri: "unix:///var/run/docker.sock"
+        templates:
+          - labelString: "docker-agent"
+            dockerTemplateBase:
+              image: "jenkins/agent"
+              mounts:
+                - "type=tmpfs,destination=/run"
+                - "type=bind,source=/var/run/docker.sock,destination=/var/run/docker.sock"
+              environmentsString: |
+                PROJECT="${PROJECT_ID}"
+            remoteFs: "/home/jenkins/agent"
+            connector:
+              attach:
+                user: "jenkins"
+            instanceCapStr: "10"
+            retentionStrategy:
+              idleMinutes: 1
+
+    - computeEngine:
+        cloudName: "jenkins-gcp-cloud"
+        projectId: "${PROJECT_ID}"
+        instanceCapStr: "10"
+        credentialsId: "${PROJECT_ID}"
+        noDelayProvisioning: true
+        configurations:
+          - namePrefix: "jenkins-artifact-builder"
+            description: "Artifact Builder Instance"
+            ignoreProxy: true
+            launchTimeoutSeconds: 300
+            launchTimeoutSecondsStr: "300"
+            retentionTimeMinutes: 1
+            retentionTimeMinutesStr: "1"
+            mode: EXCLUSIVE
+            labelSet:
+              - name: "jenkins-artifact-builder"
+            labelString: "jenkins-artifact-builder"
+            labels: "jenkins-artifact-builder"
+            numExecutors: 1
+            numExecutorsStr: "1"
+            runAsUser: "jenkins"
+            remoteFs: ""
+            javaExecPath: "java"
+            oneShot: false
+            createSnapshot: false
+            region: "https://www.googleapis.com/compute/v1/projects/${PROJECT_ID}/regions/${REGION}"
+            zone: "https://www.googleapis.com/compute/v1/projects/${PROJECT_ID}/zones/${ZONE}"
+            template: "https://www.googleapis.com/compute/v1/projects/${PROJECT_ID}/global/instanceTemplates/jenkins-artifact-builder"
+            serviceAccountEmail: "davidev@ecosystem-connectors-data.iam.gserviceaccount.com"
+
+          - namePrefix: "jenkins-multi-node-local-tests-worker"
+            description: "Multi-Node Local Environment"
+            ignoreProxy: true
+            launchTimeoutSeconds: 300
+            launchTimeoutSecondsStr: "300"
+            retentionTimeMinutes: 3
+            retentionTimeMinutesStr: "3"
+            mode: EXCLUSIVE
+            labelSet:
+              - name: "jenkins-multi-node-local-tests-worker"
+            labelString: "jenkins-multi-node-local-tests-worker"
+            labels: "jenkins-multi-node-local-tests-worker"
+            numExecutors: 1
+            numExecutorsStr: "1"
+            runAsUser: "jenkins"
+            remoteFs: ""
+            javaExecPath: "java"
+            oneShot: false
+            createSnapshot: false
+            region: "https://www.googleapis.com/compute/v1/projects/${PROJECT_ID}/regions/${REGION}"
+            zone: "https://www.googleapis.com/compute/v1/projects/${PROJECT_ID}/zones/${ZONE}"
+            template: "https://www.googleapis.com/compute/v1/projects/${PROJECT_ID}/global/instanceTemplates/jenkins-multi-node-local-tests-worker"
+            serviceAccountEmail: "davidev@ecosystem-connectors-data.iam.gserviceaccount.com"
+
+          - namePrefix: "jenkins-gcp-env-provisioner"
+            description: "Staging Env Provisioner"
+            ignoreProxy: true
+            launchTimeoutSeconds: 300
+            launchTimeoutSecondsStr: "300"
+            retentionTimeMinutes: 3
+            retentionTimeMinutesStr: "3"
+            mode: EXCLUSIVE
+            labelSet:
+              - name: "jenkins-gcp-env-provisioner"
+            labelString: "jenkins-gcp-env-provisioner"
+            labels: "jenkins-gcp-env-provisioner"
+            numExecutors: 1
+            numExecutorsStr: "1"
+            runAsUser: "jenkins"
+            remoteFs: ""
+            javaExecPath: "java"
+            oneShot: false
+            createSnapshot: false
+            region: "https://www.googleapis.com/compute/v1/projects/${PROJECT_ID}/regions/${REGION}"
+            zone: "https://www.googleapis.com/compute/v1/projects/${PROJECT_ID}/zones/${ZONE}"
+            template: "https://www.googleapis.com/compute/v1/projects/${PROJECT_ID}/global/instanceTemplates/jenkins-gcp-env-provisioner"
+            serviceAccountEmail: "davidev@ecosystem-connectors-data.iam.gserviceaccount.com"
+
+          - namePrefix: "jenkins-gcp-test-worker-test-cli"
+            description: "GCP test runner"
+            ignoreProxy: true
+            launchTimeoutSeconds: 300
+            launchTimeoutSecondsStr: "300"
+            retentionTimeMinutes: 3
+            retentionTimeMinutesStr: "3"
+            mode: EXCLUSIVE
+            labelSet:
+              - name: "jenkins-gcp-test-worker-test-cli"
+            labelString: "jenkins-gcp-test-worker-test-cli"
+            labels: "jenkins-gcp-test-worker-test-cli"
+            numExecutors: 1
+            numExecutorsStr: "1"
+            runAsUser: "jenkins"
+            remoteFs: ""
+            javaExecPath: "java"
+            oneShot: false
+            createSnapshot: false
+            region: "https://www.googleapis.com/compute/v1/projects/${PROJECT_ID}/regions/${REGION}"
+            zone: "https://www.googleapis.com/compute/v1/projects/${PROJECT_ID}/zones/${ZONE}"
+            template: "https://www.googleapis.com/compute/v1/projects/${PROJECT_ID}/global/instanceTemplates/jenkins-gcp-test-worker-test-cli"
+            serviceAccountEmail: "davidev@ecosystem-connectors-data.iam.gserviceaccount.com"
+
+          - namePrefix: "jenkins-gcp-test-worker-svc"
+            description: "GCP test runner"
+            ignoreProxy: true
+            launchTimeoutSeconds: 300
+            launchTimeoutSecondsStr: "300"
+            retentionTimeMinutes: 3
+            retentionTimeMinutesStr: "3"
+            mode: EXCLUSIVE
+            labelSet:
+              - name: "jenkins-gcp-test-worker-svc"
+            labelString: "jenkins-gcp-test-worker-svc"
+            labels: "jenkins-gcp-test-worker-svc"
+            numExecutors: 1
+            numExecutorsStr: "1"
+            runAsUser: "jenkins"
+            remoteFs: ""
+            javaExecPath: "java"
+            oneShot: false
+            createSnapshot: false
+            region: "https://www.googleapis.com/compute/v1/projects/${PROJECT_ID}/regions/${REGION}"
+            zone: "https://www.googleapis.com/compute/v1/projects/${PROJECT_ID}/zones/${ZONE}"
+            template: "https://www.googleapis.com/compute/v1/projects/${PROJECT_ID}/global/instanceTemplates/jenkins-gcp-test-worker-svc"
+            serviceAccountEmail: "davidev@ecosystem-connectors-data.iam.gserviceaccount.com"
+
+          - namePrefix: "jenkins-local-test-worker"
+            description: "Local Tests Runner"
+            ignoreProxy: true
+            launchTimeoutSeconds: 300
+            launchTimeoutSecondsStr: "300"
+            retentionTimeMinutes: 3
+            retentionTimeMinutesStr: "3"
+            mode: EXCLUSIVE
+            labelSet:
+              - name: "jenkins-local-test-worker"
+            labelString: "jenkins-local-test-worker"
+            labels: "jenkins-local-test-worker"
+            numExecutors: 1
+            numExecutorsStr: "1"
+            runAsUser: "jenkins"
+            remoteFs: ""
+            javaExecPath: "java"
+            oneShot: false
+            createSnapshot: false
+            region: "https://www.googleapis.com/compute/v1/projects/${PROJECT_ID}/regions/${REGION}"
+            zone: "https://www.googleapis.com/compute/v1/projects/${PROJECT_ID}/zones/${ZONE}"
+            template: "https://www.googleapis.com/compute/v1/projects/${PROJECT_ID}/global/instanceTemplates/jenkins-local-test-worker"
+            serviceAccountEmail: "davidev@ecosystem-connectors-data.iam.gserviceaccount.com"
+
+          - namePrefix: "jenkins-multi-node-local-tests-worker-svc"
+            description: "Multi-Node Local Environment"
+            ignoreProxy: true
+            launchTimeoutSeconds: 300
+            launchTimeoutSecondsStr: "300"
+            retentionTimeMinutes: 3
+            retentionTimeMinutesStr: "3"
+            mode: EXCLUSIVE
+            labelSet:
+              - name: "jenkins-multi-node-local-tests-worker-svc"
+            labelString: "jenkins-multi-node-local-tests-worker-svc"
+            labels: "jenkins-multi-node-local-tests-worker-svc"
+            numExecutors: 1
+            numExecutorsStr: "1"
+            runAsUser: "jenkins"
+            remoteFs: ""
+            javaExecPath: "java"
+            oneShot: false
+            createSnapshot: false
+            region: "https://www.googleapis.com/compute/v1/projects/${PROJECT_ID}/regions/${REGION}"
+            zone: "https://www.googleapis.com/compute/v1/projects/${PROJECT_ID}/zones/${ZONE}"
+            template: "https://www.googleapis.com/compute/v1/projects/${PROJECT_ID}/global/instanceTemplates/jenkins-multi-node-local-tests-worker-svc"
+            serviceAccountEmail: "davidev@ecosystem-connectors-data.iam.gserviceaccount.com"
+
+          - namePrefix: "jenkins-multi-node-local-tests-worker-cli"
+            description: "Multi-Node Local Environment"
+            ignoreProxy: true
+            launchTimeoutSeconds: 300
+            launchTimeoutSecondsStr: "300"
+            retentionTimeMinutes: 3
+            retentionTimeMinutesStr: "3"
+            mode: EXCLUSIVE
+            labelSet:
+              - name: "jenkins-multi-node-local-tests-worker-cli"
+            labelString: "jenkins-multi-node-local-tests-worker-cli"
+            labels: "jenkins-multi-node-local-tests-worker-cli"
+            numExecutors: 1
+            numExecutorsStr: "1"
+            runAsUser: "jenkins"
+            remoteFs: ""
+            javaExecPath: "java"
+            oneShot: false
+            createSnapshot: false
+            region: "https://www.googleapis.com/compute/v1/projects/${PROJECT_ID}/regions/${REGION}"
+            zone: "https://www.googleapis.com/compute/v1/projects/${PROJECT_ID}/zones/${ZONE}"
+            template: "https://www.googleapis.com/compute/v1/projects/${PROJECT_ID}/global/instanceTemplates/jenkins-multi-node-local-tests-worker-cli"
+            serviceAccountEmail: "davidev@ecosystem-connectors-data.iam.gserviceaccount.com"
+
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "jenkins"
+          password: "jenkins"
+  authorizationStrategy: unsecured
+
+tool:
+  ansible:
+    installations:
+      - home: "/opt/python_venv/bin"
+        name: "ansible-test"
+  git:
+    installations:
+      - home: "git"
+        name: "Default"
+  go:
+    installations:
+      - home: "/usr/local/go"
+        name: "Default"
+  maven:
+    installations:
+      - home: "/opt/maven/apache-maven-3.9.9"
+        name: "maven-3"
+      - home: "/opt/maven/apache-maven-latest"
+        name: "maven-latest"
+  jfrog:
+    installations:
+      - name: "jfrog-cli"
+        home: "/usr/bin/"
+
+#  mavenGlobalConfig:
+#    globalSettingsProvider: "standard"
+#    settingsProvider: "standard"
+
+#  allure:
+#    installations:
+#      - name: "Allure"
+#        properties:
+#          - installSource:
+#              installers:
+#                - allureCommandlineInstaller:
+#                    id: "2.30.0"
+
+#credentials:
+#  system:
+#    domainCredentials:
+#      - credentials:
+#          - googleRobotMetadata:
+#              projectId: "${PROJECT_ID}"
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - googleRobotPrivateKey:
+              id: "${PROJECT_ID}"
+              projectId: "${PROJECT_ID}"
+              serviceAccountConfig:
+                json:
+                  secretJsonKey: "${SA_KEY}"
+
+          #          - googleRobotMetadata:
+          #              projectId: "${PROJECT_ID}"
+          #          - usernamePassword:
+          #              scope: GLOBAL
+          #              id: "github-username-token"
+          #              username: "${GITHUB_USERNAME}"
+          #              password: "${GITHUB_TOKEN}"
+          #              description: "GitHub username and token"
+          - file:
+              scope: GLOBAL
+              id: "gcloud-creds"
+              fileName: "key.json"
+              secretBytes: "${SA_KEY}"
+#          - googleRobotPrivateKey:
+#              projectId: "${PROJECT_ID}"
+#              serviceAccountConfig:
+#                json:
+#                  secretJsonKey: "${SA_KEY}"
+unclassified:
+  jFrogPlatformBuilder:
+    jfrogInstances:
+      - serverId: "aerospike"
+        url: "https://aerospike.jfrog.io"
+        artifactoryUrl: "https://aerospike.jfrog.io/artifactory"
+        distributionUrl: "https://aerospike.jfrog.io/distribution"
+        xrayUrl: "https://acme.jfrog.io/xray"
+        credentialsConfig:
+          credentialsId: "jfrog-credentials"
+  gcpCredentialsProvider:
+    filter:
+      label: "environment"
+      value: "jenkins"
+    project: "${PROJECT_ID}"
+  ansiColorBuildWrapper:
+    globalColorMapName: "xterm"
+  scmGit:
+    addGitTagAction: false
+    allowSecondFetch: false
+    createAccountBasedOnEmail: false
+    disableGitToolChooser: false
+    globalConfigEmail: "jenkins@aerospike.com"
+    globalConfigName: "jenkins"
+    hideCredentials: true
+    showEntireCommitSummaryInChanges: true
+    useExistingAccountWithSameEmail: false
+  globalDatabaseConfiguration:
+    database:
+      globalSQLite:
+        path: "/data/jenkins.db"
+  globalLibraries:
+    libraries:
+      - cachingConfiguration:
+          refreshTimeMinutes: 0
+        defaultVersion: "master"
+        name: "jenkins-sqlite-lib"
+        retriever:
+          modernSCM:
+            libraryPath: "devops/backup-service/env/gcp/automation/jenkins/jobs/jenkins-sqlite-lib/"
+            scm:
+              git:
+                credentialsId: "github-token"
+                remote: "https://github.com/citrusleaf/ecosystem-automation.git"
+                traits:
+                  - "gitBranchDiscovery"
+                  - cloneOption:
+                      extension:
+                        depth: 1
+                        noTags: true
+                        reference: "devops/backup-service/env/gcp/automation/jenkins/jobs/jenkins-sqlite-lib"
+                        shallow: true
+
+      - cachingConfiguration:
+          refreshTimeMinutes: 0
+        defaultVersion: "master"
+        name: "jenkins-devops-lib"
+        retriever:
+          modernSCM:
+            libraryPath: "devops/backup-service/env/gcp/automation/jenkins/jobs/jenkins-devops-lib/"
+            scm:
+              git:
+                credentialsId: "github-token"
+                remote: "https://github.com/citrusleaf/ecosystem-automation.git"
+                traits:
+                  - "gitBranchDiscovery"
+                  - cloneOption:
+                      extension:
+                        depth: 1
+                        noTags: true
+                        reference: "devops/backup-service/env/gcp/automation/jenkins/jobs/jenkins-devops-lib"
+                        shallow: true
+
+security:
+  globaljobdslsecurityconfiguration:
+    useScriptSecurity: false
+
+jobs:
+  - script: >
+      folder("abs") {
+          displayName("Aerospike Backup Service")
+          description("Aerospike Backup Service related jobs")
+      }
+
+  - script: >
+      folder("devops") {
+          displayName("DevOps")
+          description("Infrastructure related jobs")
+      }
+
+  - script: >
+      folder("cli") {
+          displayName("Aerospike Backup CLI")
+          description("Aerospike Backup CLI related jobs")
+      }
+
+  - script: >
+      folder("spring-data") {
+          displayName("Aerospike Spring Data")
+          description("Aerospike Spring Data related jobs")
+      }
+
+  - script: >
+      pipelineJob("create-pipeline-jobs") {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  credentials("github-token")
+                  url("https://github.com/citrusleaf/ecosystem-automation.git")
+                }
+                branch("*/master")
+              }
+            }
+            scriptPath("devops/backup-service/env/gcp/automation/jenkins/jobs/jenkinsfiles/seed.Jenkinsfile")
+          }
+        }
+      }

@@ -1,0 +1,135 @@
+apiVersion: asdb.aerospike.com/v1
+kind: AerospikeCluster
+metadata:
+  name: aerocluster
+  namespace: aerospike
+
+spec:
+  podSpec:
+    multiPodPerHost: true
+{% if asdb_tls_enabled == True %}
+  operatorClientCert:
+    secretCertSource:
+      secretName: aerospike-tls
+      caCertsFilename: ca.aerospike.com.pem
+      secretNamespace: aerospike
+{% endif %}
+  size: {{ asdb_size }}
+  image: "aerospike/aerospike-server-enterprise:{{ asdb_version }}"
+  storage:
+    filesystemVolumePolicy:
+      initMethod: deleteFiles
+      cascadeDelete: true
+    blockVolumePolicy:
+      cascadeDelete: true
+    volumes:
+      - name: workdir
+        aerospike:
+          path: /opt/aerospike
+        source:
+          persistentVolume:
+            storageClass: ssd-local-path
+            volumeMode: Filesystem
+            size: 1Gi
+{% if asdb_tls_enabled == True %}
+      - name: aerospike-tls-config
+        source:
+          secret:
+            secretName: aerospike-tls
+        aerospike:
+          path: /etc/aerospike/ssl
+{% endif %}
+{% for i in range(1, asdb_namespaces | int + 1) %}
+      - name: source-ns{{ i }}
+        aerospike:
+          path: /opt/aerospike/data/ns-{{ i }}
+        source:
+          persistentVolume:
+            storageClass: ssd-local-path
+            volumeMode: Filesystem
+            size: 5Gi
+{% endfor %}
+  aerospikeAccessControl:
+    users:
+      - name: admin
+        secretName: admin-auth
+        roles:
+          - sys-admin
+          - user-admin
+      - name: {{ aerospike.username }}
+        secretName: tester-auth
+        roles:
+          - truncate
+          - sindex-admin
+          - user-admin
+          - data-admin
+          - read-write
+          - read
+          - write
+          - read-write-udf
+          - sys-admin
+          - udf-admin
+
+  aerospikeConfig:
+    service:
+      secrets-address-port: "aerospike-secret-agent 3005"
+      feature-key-file: secrets:featuresConf:features-conf
+    security: {}
+    network:
+      service:
+{% if asdb_tls_enabled == True %}
+        tls-name: {{ aerospike.tls_name }}
+        tls-authenticate-client: "false"
+        tls-port: 4333
+{% else %}
+        port: 3000
+{% endif %}
+      fabric:
+{% if asdb_tls_enabled == True %}
+        tls-name: {{ aerospike.tls_name }}
+        tls-port: 3012
+{% else %}
+        port: 3001
+{% endif %}
+      heartbeat:
+{% if asdb_tls_enabled == True %}
+        tls-name: {{ aerospike.tls_name }}
+        tls-port: 3011
+{% else %}
+        port: 3002
+{% endif %}
+{% if asdb_tls_enabled == True %}
+      tls:
+        - name: {{ aerospike.tls_name }}
+          cert-file: secrets:asdCert:asd-aerospike-com-pem
+          key-file: secrets:asdKey:asd-aerospike-com-key
+          ca-file: /etc/aerospike/ssl/ca.aerospike.com.pem
+{% endif %}
+    namespaces:
+{% for i in range(1, asdb_namespaces | int + 1) %}
+      - name: source-ns{{ i }}
+{% if i in [7, 12, 13] %}
+        max-record-size: 8388608
+{% endif %}
+        replication-factor: {{ asdb_ns_replication_factor }}
+        default-ttl: 2592000
+        nsup-period: 120
+{% if asdb_sc_enabled == True %}
+        strong-consistency: true
+        strong-consistency-allow-expunge: true
+{% endif %}
+{#        storage-engine:#}
+{#          type: memory#}
+{#          data-size: 1073741824#}
+
+        storage-engine:
+          type: device
+          files:
+            - /opt/aerospike/data/ns-{{ i }}/source-ns{{ i }}.dat
+{% if asdb_version is version('7.1.0.0', operator='lt') and (i == 7 or i == 12 or i == 13) %}
+          write-block-size: 8388608
+{% elif i == 7 or i == 12 or i == 13 %}
+          flush-size: 8388608
+{% endif %}
+          filesize: 5368709120
+{% endfor %}

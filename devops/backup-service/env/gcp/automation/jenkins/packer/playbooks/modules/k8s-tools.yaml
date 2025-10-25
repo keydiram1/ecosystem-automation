@@ -1,0 +1,95 @@
+- name: Install Kubernetes Tools
+  block:
+    - name: Install Kubectl
+      block:
+      - name: Get latest stable kubectl version
+        uri:
+          url: https://dl.k8s.io/release/stable.txt
+          return_content: yes
+        register: kubectl_latest_version
+
+      - name: Download latest kubectl binary
+        get_url:
+          url: "https://dl.k8s.io/release/{{ kubectl_latest_version.content }}/bin/linux/{{ architecture_map[ansible_architecture] }}/kubectl"
+          dest: /usr/local/bin/kubectl
+          owner: root
+          group: root
+          mode: '0755'
+
+      - name: Generate kubectl bash completion script
+        command: kubectl completion bash
+        register: kubectl_completion
+
+      - name: Write kubectl completion script to /etc/bash_completion.d/
+        become: true
+        copy:
+          dest: /etc/bash_completion.d/kubectl
+          content: "{{ kubectl_completion.stdout }}"
+          owner: root
+          group: root
+          mode: '0644'
+
+      - name: Create system-wide alias and alias completion for kubectl
+        become: true
+        copy:
+          dest: /etc/profile.d/kubectl_alias.sh
+          content: |
+            alias k=kubectl
+            complete -o default -F __start_kubectl k
+          owner: root
+          group: root
+          mode: '0644'
+
+    - name: Install Helm
+      block:
+        - name: Get latest Helm version
+          set_fact:
+            helm_latest_version: >-
+              {{ lookup('ansible.builtin.url', 'https://api.github.com/repos/helm/helm/releases/latest', split_lines=False)
+                 | from_json
+                 | json_query('tag_name') }}
+
+        - name: Download Helm .tar.gz package
+          get_url:
+            url: "https://get.helm.sh/helm-{{ helm_latest_version }}-linux-{{ architecture_map[ansible_architecture] }}.tar.gz"
+            dest: "/tmp/helm-{{ helm_latest_version }}-linux-{{ architecture_map[ansible_architecture] }}.tar.gz"
+            owner: root
+            group: root
+            mode: '0755'
+
+        - name: Extract Helm .tar.gz package
+          unarchive:
+            src: "/tmp/helm-{{ helm_latest_version }}-linux-{{ architecture_map[ansible_architecture] }}.tar.gz"
+            dest: /tmp
+            remote_src: yes
+
+        - name: Copy Helm binary to /usr/local/bin with correct permissions
+          copy:
+            src: /tmp/linux-{{ architecture_map[ansible_architecture] }}/helm
+            dest: /usr/local/bin/helm
+            mode: '0755'
+            owner: root
+            group: root
+            remote_src: yes
+
+        - name: Remove Helm installation directory
+          file:
+            path: "/tmp/linux-{{ architecture_map[ansible_architecture] }}/helm"
+            state: absent
+
+        - name: Remove Helm archive
+          file:
+            path: "/tmp/helm-{{ helm_latest_version }}-linux-{{ architecture_map[ansible_architecture] }}.tar.gz"
+            state: absent
+
+        - name: Generate Helm bash completion script
+          command: helm completion bash
+          register: helm_completion
+
+        - name: Write Helm completion script to /etc/bash_completion.d/
+          copy:
+            dest: /etc/bash_completion.d/helm
+            content: "{{ helm_completion.stdout }}"
+            owner: root
+            group: root
+            mode: '0644'

@@ -1,0 +1,6 @@
+s3-storage:
+  path: config.yml
+  bucket: as-backup-bucket
+  s3-region: eu-central-1
+  s3-profile: minio
+  s3-endpoint-override: http://host.docker.internal:9000

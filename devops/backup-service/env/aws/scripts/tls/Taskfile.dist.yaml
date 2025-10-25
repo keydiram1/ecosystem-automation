@@ -1,0 +1,17 @@
+version: '3'
+tasks:
+  generate:
+    cmds:
+      - ./make-certificates.sh
+  upload:
+    cmds:
+      - ./upload-certificates.sh
+  delete:
+    cmds:
+      - ./delete-certificates.sh
+  get-secret:
+    cmds:
+      - aws secretsmanager get-secret-value --secret-id abs/testenv/{{.CLI_ARGS}} --query SecretString --output text | base64 --decode
+  clean:
+    cmds:
+      - rm -rf rootca

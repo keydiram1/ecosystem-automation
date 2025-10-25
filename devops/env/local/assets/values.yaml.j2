@@ -1,0 +1,215 @@
+configmap:
+  create: false
+namespace: aerospike
+image:
+  repository: "aerospike.jfrog.io/ecosystem-container-dev-local/aerospike-backup-service"
+  tag: v3
+args:
+  - "-c"
+  - "/etc/aerospike-backup-service/aerospike-backup-service.yml"
+{% if asdb_tls_enabled == True %}
+extraSecretVolumeMounts:
+  - name: aerospike-tls
+    mountPath: /etc/aerospike-backup-service/ssl
+    readOnly: true
+{% endif %}
+imagePullSecrets:
+  - name: "regcred"
+{% if asdb_tls_enabled == True %}
+volumes:
+  - name: aerospike-tls
+    secret:
+      secretName: aerospike-tls
+{% endif %}
+backupServiceConfig:
+  aerospike-clusters:
+    absDefaultCluster:
+      label: asd.aerospike.com
+      seed-nodes:
+        - host-name: aerocluster-0-0
+{% if asdb_tls_enabled == True %}
+          port: 4333
+          tls-name: asd.aerospike.com
+{% else %}
+          port: 3000
+{% endif %}
+      credentials:
+        secret-agent-name: absSecretAgent
+        user: tester
+        password: secrets:asdPsw:password-txt
+{% if asdb_tls_enabled == True %}
+      tls:
+        ca-file: /etc/aerospike-backup-service/ssl/ca.aerospike.com.pem
+        name: asd.aerospike.com
+{% endif %}
+      max-parallel-scans: 5
+  storage:
+    backup-storage:
+      gcp-storage:
+        bucket-name: abs-testing-bucket
+        key: secrets:gcpSaKeyFile:gcp-sa-key-file
+        path: local-tests
+  backup-policies:
+    encryptedCompressedSecretAgentPolicy:
+      parallel: 8
+      retention:
+        full: 1
+        incremental: 0
+      encryption:
+        mode: AES256
+        key-secret: secrets:encKey:encryption-key-pem
+      compression:
+        mode: ZSTD
+        level: 20
+      sealed: true
+    defaultPolicy:
+      parallel: 8
+      sealed: true
+      with-cluster-configuration: true
+    withBandwidthLimit:
+      parallel: 8
+      bandwidth: 10
+      sealed: true
+  backup-routines:
+    edgeCases:
+      backup-policy: defaultPolicy
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      interval-cron: '@yearly'
+      namespaces:
+        - source-ns7
+    everySecondBackup:
+      backup-policy: defaultPolicy
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      interval-cron: '* * * * * *'
+      namespaces:
+        - source-ns20
+      disabled: true
+    filterBySetAndBin:
+      backup-policy: defaultPolicy
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      interval-cron: '@yearly'
+      namespaces:
+        - source-ns8
+      set-list:
+        - backupSet
+      bin-list:
+        - backupBin
+    fullBackup1:
+      backup-policy: defaultPolicy
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      interval-cron: '@yearly'
+      namespaces:
+        - source-ns9
+    fullBackup2:
+      backup-policy: defaultPolicy
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      interval-cron: '@yearly'
+      namespaces:
+        - source-ns11
+    fullBackup3:
+      backup-policy: defaultPolicy
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      interval-cron: '@yearly'
+      namespaces:
+        - source-ns12
+    fullBackup3Namespaces:
+      backup-policy: defaultPolicy
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      interval-cron: '@yearly'
+      namespaces:
+        - source-ns15
+        - source-ns16
+        - source-ns17
+    fullBackup4:
+      backup-policy: defaultPolicy
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      interval-cron: '@yearly'
+      namespaces:
+        - source-ns21
+    fullBackup5:
+      backup-policy: defaultPolicy
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      interval-cron: '@yearly'
+      namespaces:
+        - source-ns22
+    fullBackup6:
+      backup-policy: defaultPolicy
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      interval-cron: '@yearly'
+      namespaces:
+        - source-ns23
+    fullBackupEncryptedCompressedSecretAgent:
+      backup-policy: encryptedCompressedSecretAgentPolicy
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      secret-agent: absSecretAgent
+      interval-cron: '@yearly'
+      namespaces:
+        - source-ns1
+    fullBackupFullCluster:
+      backup-policy: defaultPolicy
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      interval-cron: '@yearly'
+    fullBackupSlow:
+      backup-policy: withBandwidthLimit
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      interval-cron: '*/20 * * * * *'
+      namespaces:
+        - source-ns13
+    incrementalBackupCluster:
+      backup-policy: defaultPolicy
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      interval-cron: '@yearly'
+      incr-interval-cron: '*/45 * * * * *'
+    incrementalBackupMultipleNSs:
+      backup-policy: defaultPolicy
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      interval-cron: '@yearly'
+      incr-interval-cron: '*/30 * * * * *'
+      namespaces:
+        - source-ns18
+        - source-ns19
+        - source-ns20
+    localStorageIncremental3:
+      backup-policy: defaultPolicy
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      interval-cron: '@yearly'
+      incr-interval-cron: '*/10 * * * * *'
+      namespaces:
+        - source-ns10
+    minio:
+      backup-policy: defaultPolicy
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      interval-cron: '@yearly'
+      namespaces:
+        - source-ns4
+    timestamp:
+      backup-policy: defaultPolicy
+      source-cluster: absDefaultCluster
+      storage: backup-storage
+      interval-cron: '@yearly'
+      incr-interval-cron: '*/9 * * * * *'
+      namespaces:
+        - source-ns14
+  secret-agents:
+    absSecretAgent:
+      connection-type: tcp
+      address: aerospike-secret-agent
+      port: 3005
+      is-base64: true

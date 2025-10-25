@@ -1,0 +1,23 @@
+version: '3'
+
+includes:
+  images:
+    taskfile: ./packer/Taskfile.dist.yaml
+    dir: ./packer
+
+tasks:
+  delete-image:
+    cmds:
+      - curl -u${DOCKER_USERNAME}:${DOCKER_PASSWORD} -X DELETE "https://aerospike.jfrog.io/artifactory/ecosystem-container-dev-local/ecosys-jenkins-server/latest"
+  build-image:
+    cmds:
+      - DOCKER_USERNAME="${DOCKER_USERNAME}" DOCKER_PASSWORD="${DOCKER_PASSWORD}" JFROG_USERNAME="${JFROG_USERNAME}" JFROG_TOKEN="${JFROG_TOKEN}" cd scripts && ./build-jenkins.sh && cd -
+  build-all:
+    vars:
+      IMAGE_TASKS:
+        sh: task --list-all --json | jq -r '.tasks[] | select(.name | startswith("images:")) | .name'
+    cmds:
+      - for: { var: IMAGE_TASKS }
+        cmd: task {{.ITEM}}
+      - task: delete-image
+      - task: build-image

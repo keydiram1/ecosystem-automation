@@ -1,0 +1,369 @@
+- name: "Install Multi-Node cluster"
+  hosts: localhost
+  connection: local
+
+  vars:
+    ansible_python_interpreter: "/opt/python_venv/bin/python3"
+
+  vars_files:
+    - "./vars/vars.yaml"
+
+  tasks:
+    - name: "Set Variables"
+      set_fact:
+        asdb_version: "{{ lookup('env', 'ASDB_VERSION', default=aerospike.version) | string }}"
+        asdb_size: "{{ lookup('env', 'ASDB_SIZE', default=aerospike.size) | int }}"
+        asdb_tls_enabled: "{{ lookup('env', 'ASDB_TLS_ENABLED', default=aerospike.tls_enabled) | bool }}"
+        asdb_roster_enabled: "{{ lookup('env', 'ASDB_ROSTER_ENABLED', default=aerospike.roster_enabled) | bool }}"
+        asdb_sc_enabled: "{{ lookup('env', 'ASDB_SC_ENABLED', default=aerospike.sc_enabled) | bool }}"
+        asdb_namespaces: "{{ lookup('env', 'ASDB_NAMESPACES', default=aerospike.namespaces) | int }}"
+        asdb_ns_replication_factor: "{{ lookup('env', 'ASDB_NS_REPLICATION_FACTOR', default=aerospike.replication_factor) | int }}"
+        ca_aerospike_com_pem_path: "{{ lookup('env', 'CA_AEROSPIKE_COM_PEM_PATH') | string }}"
+
+
+    - name: "Print Variables with Types"
+      debug:
+        msg:
+          - "ASDB Version: {{ asdb_version }} (Type: {{ asdb_version | type_debug }})"
+          - "ASDB Size: {{ asdb_size }} (Type: {{ asdb_size | type_debug }})"
+          - "TLS Enabled: {{ asdb_tls_enabled }} (Type: {{ asdb_tls_enabled | type_debug }})"
+          - "Roster Enabled: {{ asdb_roster_enabled }} (Type: {{ asdb_roster_enabled | type_debug }})"
+          - "SC Enabled: {{ asdb_sc_enabled }} (Type: {{ asdb_sc_enabled | type_debug }})"
+          - "Namespaces: {{ asdb_namespaces }} (Type: {{ asdb_namespaces | type_debug }})"
+          - "Replication Factor: {{ asdb_ns_replication_factor }} (Type: {{ asdb_ns_replication_factor | type_debug }})"
+
+    - name: "Run Common Tasks"
+      include_tasks: "modules/deploy-common-tasks.yaml"
+
+    - name: "Create ConfigMap for Aerospike Secret Agent"
+      k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: aerospike-secret-agent-cm
+            namespace: aerospike
+          data:
+            aerospike-secret-agent.yaml: |
+              "secret-manager":
+                "gcp":
+                  "credential-file": /etc/secret/aerospike-secret-agent-local-sa/aerospike-secret-agent-local-sa.json
+                  "convert-to-base64": true
+                  "resources":
+                    "asdCert": "{{ aerospike.secret_path.asd_cert }}"
+                    "asdKey": "{{ aerospike.secret_path.asd_key }}"
+                    "asdPsw": "{{ aerospike.secret_path.asd_psw }}"
+                    "awsAccessKey": "{{ aerospike.secret_path.aws_access_key }}"
+                    "awsSecretAccessKey": "{{ aerospike.secret_path.aws_secret_access_key }}"
+                    "azureClientID": "{{ aerospike.secret_path.azure_client_id }}"
+                    "azureClientSecret": "{{ aerospike.secret_path.azure_client_secret }}"
+                    "azureTenantID": "{{ aerospike.secret_path.azure_tenant_id }}"
+                    "caCert": "{{ aerospike.secret_path.ca_cert }}"
+                    "encKey": "{{ aerospike.secret_path.enc_key }}"
+                    "featuresConf": "{{ aerospike.secret_path.features_conf }}"
+                    "gcpSaKeyFile": "{{ aerospike.secret_path.gcp_sa_key_file }}"
+              "service":
+                "http":
+                  "endpoint": "0.0.0.0:8080"
+                "tcp":
+                  "endpoint": "0.0.0.0:3005"
+
+    - name: "Create Aerospike Secret Agent credentials secret on local machine"
+      block:
+        - name: "Retrieve aerospike-secret-agent-local-sa.json file from GCP secret manager"
+          google.cloud.gcp_secret_manager:
+            name: "aerospike-secret-agent-local-sa"
+            state: present
+            project: "{{ gcp.project_id }}"
+            auth_kind: "application"
+          register: credentials
+
+        - name: "Create Kubernetes secret with Aerospike Secret Agent credentials"
+          k8s:
+            state: present
+            definition:
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: aerospike-secret-agent-local-sa-secret
+                namespace: aerospike
+              data:
+                aerospike-secret-agent-local-sa.json: "{{ credentials.value | b64encode }}"
+              type: Opaque
+      when: not is_jenkins
+
+    - name: "Create Deployment for Aerospike Secret Agent"
+      k8s:
+        state: present
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: aerospike-secret-agent
+            namespace: aerospike
+            labels:
+              app: aerospike-secret-agent
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: aerospike-secret-agent
+            template:
+              metadata:
+                labels:
+                  app: aerospike-secret-agent
+              spec:
+                containers:
+                  - name: aerospike-secret-agent
+                    image: aerospike/aerospike-secret-agent:1.2.3
+                    ports:
+                      - containerPort: 3005
+                        protocol: TCP
+                      - containerPort: 8080
+                        protocol: TCP
+                    args:
+                      - "--config-file"
+                      - "/etc/aerospike-secret-agent/aerospike-secret-agent.yaml"
+                    livenessProbe:
+                      httpGet:
+                        path: /manage
+                        port: 8080
+                      initialDelaySeconds: 15
+                      timeoutSeconds: 1
+                      periodSeconds: 10
+                      successThreshold: 1
+                      failureThreshold: 3
+                    readinessProbe:
+                      httpGet:
+                        path: /manage
+                        port: 8080
+                      initialDelaySeconds: 15
+                      timeoutSeconds: 1
+                      periodSeconds: 10
+                      successThreshold: 1
+                      failureThreshold: 3
+                    volumeMounts:
+                      - name: aerospike-secret-agent-config
+                        mountPath: /etc/aerospike-secret-agent/aerospike-secret-agent.yaml
+                        subPath: aerospike-secret-agent.yaml
+                      - name: aerospike-secret-agent-local-creds
+                        mountPath: /etc/secret/aerospike-secret-agent-local-sa/aerospike-secret-agent-local-sa.json
+                        subPath: aerospike-secret-agent-local-sa.json
+
+                volumes:
+                  - name: aerospike-secret-agent-config
+                    configMap:
+                      name: aerospike-secret-agent-cm
+                  - name: aerospike-secret-agent-local-creds
+                    secret:
+                      secretName: aerospike-secret-agent-local-sa-secret
+
+    - name: "Create Service for Aerospike Secret Agent"
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: aerospike-secret-agent
+            namespace: aerospike
+            labels:
+              app: aerospike-secret-agent
+          spec:
+            selector:
+              app: aerospike-secret-agent
+            ports:
+              - name: "secret-agent"
+                port: 3005
+                protocol: "TCP"
+                targetPort: 3005
+              - name: "metrics"
+                port: 8080
+                protocol: "TCP"
+                targetPort: 8080
+
+    - name: "Create NodePort Service for Aerospike Secret Agent"
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: aerospike-secret-agent-external
+            namespace: aerospike
+            labels:
+              app: aerospike-secret-agent
+          spec:
+            type: NodePort
+            selector:
+              app: aerospike-secret-agent
+            ports:
+              - name: "secret-agent"
+                port: 3005
+                protocol: "TCP"
+                targetPort: 3005
+              - name: "metrics"
+                port: 8080
+                protocol: "TCP"
+                targetPort: 8080
+
+    - name: "Generate ASDB Configuration"
+      template:
+        src: "assets/aerospike.yaml.j2"
+        dest: "assets/aerospike.yaml"
+        mode: "0644"
+
+    - name: "Create Kubernetes tester-auth in the aerospike namespace"
+      k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: tester-auth
+            namespace: aerospike
+          type: Opaque
+          data:
+            password: "{{ aerospike.password | b64encode }}"
+
+    - name: "Create Kubernetes admin-auth in the aerospike namespace"
+      k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: admin-auth
+            namespace: aerospike
+          type: Opaque
+          data:
+            password: "{{ 'admin' | b64encode }}"
+
+    - name: "Get TLS Root CA"
+      google.cloud.gcp_secret_manager:
+        name: "ca-aerospike-com-pem"
+        state: present
+        project: "{{ gcp.project_id }}"
+        auth_kind: "application"
+      register: ca_aerospike_com_pem
+      when: asdb_tls_enabled
+
+    - name: "Create aerospike-tls in the aerospike namespace"
+      k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: aerospike-tls
+            namespace: aerospike
+          type: Opaque
+          data:
+            ca.aerospike.com.pem: "{{ ca_aerospike_com_pem.value | b64encode }}"
+      when: asdb_tls_enabled
+
+    - name: "Wait for AKO to be ready"
+      shell: |
+        AKO_CSV_NAME="aerospike-kubernetes-operator.v$(curl \
+        --silent https://api.github.com/repos/aerospike/aerospike-kubernetes-operator/releases/latest \
+        | jq -r .tag_name)"
+        
+        kubectl wait --for=create "csv/$AKO_CSV_NAME" --namespace operators --timeout=300s
+        kubectl wait --for=jsonpath='{.status.phase}'=Succeeded "csv/$AKO_CSV_NAME" --namespace operators --timeout=300s
+        kubectl wait --for=condition=Ready pod --all --namespace operators --timeout 300s
+        sleep 10
+      args:
+        executable: /bin/bash
+
+    - name: "Apply ASDB configuration"
+      k8s:
+        state: present
+        definition: "{{ lookup('file', 'assets/aerospike.yaml') }}"
+        wait: true
+        wait_timeout: 240
+        wait_sleep: 2
+
+    - name: "Wait for ASDB to be ready"
+      shell: |
+        ASDB_APP_NAME="aerospike-cluster"
+        until [[ $(kubectl get pod \
+        --selector=app="$ASDB_APP_NAME" \
+        --namespace=aerospike --no-headers 2>/dev/null | wc -l) -gt 0 ]]; do sleep 1; done
+        kubectl wait --for=condition=ready pod --selector=app="$ASDB_APP_NAME" --timeout=360s --namespace aerospike
+      args:
+        executable: /bin/bash
+
+    - name: "Enable Roster for multiple nodes and capture output"
+      shell: |
+        kubectl --namespace aerospike wait pods --selector=statefulset.kubernetes.io/pod-name --for=condition=ready --timeout=180s
+        
+        asdb_namespaces="{{ asdb_namespaces | int }}"
+        
+        for ((i=1; i<=asdb_namespaces; i++)); do
+          namespace="source-ns$i"
+          echo "Processing namespace: $namespace"
+        
+          asdb_ip=$(kubectl get nodes -o jsonpath="{range .items[*]}{.status.addresses[?(@.type=='ExternalIP')].address}{.status.addresses[?(@.type=='InternalIP')].address}{end}")
+          asdb_port=$(kubectl get service --namespace aerospike aerocluster-0-0 -o jsonpath="{.spec.ports[0].nodePort}")
+    
+          if [[ "$ASDB_TLS_ENABLED" == "true" ]]; then
+            cmd="asinfo -U tester -P psw \
+            -h \"$asdb_ip:{{ aerospike.tls_name }}:$asdb_port\" \
+            --tls-enable \
+            --tls-cafile \"{{ ca_aerospike_com_pem_path }}\""
+          else
+            cmd="asinfo -U tester -P psw -h \"$asdb_ip\" -p \"$asdb_port\""
+          fi
+        
+          echo "$cmd -v roster:namespace=$namespace | awk -F '[:=]' '{for(i=1;i<=NF;i++) if(\$i==\"observed_nodes\") print \$(i+1)}'"
+    
+          echo "Checking observed nodes for $namespace"
+          observed_nodes=$(eval "$cmd -v roster:namespace=$namespace" \
+          | awk -F '[:=]' '{for(i=1;i<=NF;i++) if($i=="observed_nodes") print $(i+1)}')
+        
+          if [[ -z "$observed_nodes" || "$observed_nodes" == "null" ]]; then
+            echo "No observed nodes for namespace: $namespace"
+            continue
+          fi
+        
+          echo "Setting roster for $namespace with nodes: $observed_nodes"
+          eval "$cmd -v roster-set:namespace=$namespace;nodes=$observed_nodes"
+        
+          echo "Checking pending roster for $namespace"
+          pending_roster=$(eval "$cmd -v roster:namespace=$namespace" \
+          | awk -F '[:=]' '{for(i=1;i<=NF;i++) if($i=="pending_roster") print $(i+1)}')
+        
+          if [[ -z "$pending_roster" || "$pending_roster" == "null" ]]; then
+            echo "No pending nodes for namespace: $namespace"
+            continue
+          fi
+        
+          echo "Initiating recluster for $namespace"
+          eval "$cmd -v recluster:namespace=$namespace"
+        
+          echo "Checking final roster for $namespace"
+          roster=$(eval "$cmd -v roster:namespace=$namespace" \
+          | awk -F '[:=]' '{for(i=1;i<=NF;i++) if($i=="roster") print $(i+1)}')
+        
+          if [[ -z "$roster" || "$roster" == "null" ]]; then
+            echo "No roster nodes for namespace: $namespace"
+            continue
+          fi
+        
+          echo "Final roster for $namespace: $roster"
+        done
+      args:
+        executable: /bin/bash
+      register: roster_output
+      when:
+        - asdb_roster_enabled
+        - asdb_version is version('8.0.0', '>=', version_type='loose')
+
+
+    - name: "Display Roster Script Output"
+      debug:
+        msg: "{{ roster_output.stdout_lines }}"
+      when:
+        - asdb_roster_enabled
+        - asdb_version is version('8.0.0', '>=', version_type='loose')

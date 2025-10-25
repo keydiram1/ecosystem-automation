@@ -1,0 +1,293 @@
+- name: "ASDB Installation"
+  hosts: all
+  gather_facts: no
+  become: yes
+  
+  vars_files:
+    - "{{ playbook_dir }}/vars/vars.yaml"
+  remote_user: "{{ user }}"
+  tasks:
+    - name: Refresh Inventory
+      meta: refresh_inventory
+
+    - name: "Wait for connection"
+      wait_for_connection:
+        timeout: 300
+
+    - name: "Install Ops Agent"
+      include_tasks: "{{ playbook_dir }}/modules/ops-agent.yaml"
+      when: ops_agent | bool
+
+    - name: "Gather only ansible_hostname"
+      setup:
+        filter: ansible_hostname
+
+    - name: "Get Node number"
+      set_fact:
+        node_number: "{{ '%x' | format((ansible_hostname.split('-')[-1] | int) + 1) }}"
+
+    - name: "Create /etc/aerospike directory"
+      file:
+        path: "/etc/aerospike"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: "Create /var/log/aerospike directory"
+      file:
+        path: "/var/log/aerospike"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: "Install Ops Agent"
+      include_tasks: "{{ playbook_dir }}/modules/ops-agent.yaml"
+      when: ops_agent | bool
+
+    - name: "No Secret Agent Tasks"
+      include_tasks: "{{ playbook_dir }}/modules/no-secret-agent.yaml"
+      when: not (secret_agent | bool)
+
+    - name: "List of NVMe devices"
+      find:
+        file_type: link
+        paths: /dev/
+        recurse: yes
+        patterns: "^google-local-nvme-ssd-.*"
+        use_regex: yes
+      register: nvme_devices
+
+    - name: "List NVMe Shadow devices"
+      find:
+        file_type: link
+        paths: /dev/
+        recurse: yes
+        patterns: "^google-persistent-disk-.*"
+        use_regex: yes
+      register: nvme_shadow_devices
+      when: device_shadow
+
+    - name: "Iterate over NVMe devices"
+      include_tasks: "{{ playbook_dir }}/modules/mount-fs-tasks.yaml"
+      loop: "{{ nvme_devices.files }}"
+      loop_control:
+        index_var: idx
+      when: device_type == 'filesystem'
+
+    - name: "Run blkdiscard over NVMe disk"
+      command: blkdiscard -z --length 8MiB {{ item.path }}
+      loop: "{{ nvme_devices.files }}"
+      when: device_type == 'raw'
+
+    - name: "Get ASDB download URL"
+      command:
+        cmd: python3 get-asdb-download-url.py
+        chdir: "{{ playbook_dir }}/assets"
+      environment:
+        DISTRO: "{{ distro }}"
+        ARCH: "{{ arch }}"
+        ASDB_VERSION: "{{ asdb_version }}"
+      register: download_url
+      run_once: true
+      become: no
+      delegate_to: "localhost"
+
+    - name: "Get Installation Directory name"
+      set_fact:
+        download_file: "{{ download_url.stdout | basename }}"
+
+    - name: "Download ASDB"
+      get_url:
+        url: "{{ download_url.stdout }}"
+        dest: "/tmp/{{ download_file }}"
+
+    - name: "Unpack ASDB"
+      unarchive:
+        remote_src: yes
+        src: "/tmp/{{ download_file }}"
+        dest: "/tmp"
+
+    - name: "Get cluster IP addresses"
+      set_fact:
+        cluster_ip_addresses: "{{ cluster_ip_addresses + [ hostvars[item].networkInterfaces[0].networkIP ] }}"
+      with_items:
+        - "{{ groups[ workspace.replace('-', '_') + '_asdb_workspace_' + workspace.replace('-', '_') ] }}"
+      vars:
+        cluster_ip_addresses: [ ]
+
+#    - name: "Generate aerospike.conf locally"
+#      block:
+#        - name: "Include tasks to generate aerospike.conf"
+#          include_tasks: "{{ playbook_dir }}/modules/generate-asdb-conf-tasks.yaml"
+#
+#        - name: "Check if aerospike.conf is generated"
+#          stat:
+#            path: "{{ playbook_dir }}/assets/aerospike.conf"
+#          register: aerospike_conf
+#
+#      delegate_to: "localhost"
+#      run_once: true
+#      become: no
+
+    - name: "Run Best Practice steps"
+      import_tasks: "{{ playbook_dir }}/modules/best-practices-tasks.yaml"
+
+    - block:
+        - name: "Get TLS Root CA"
+          google.cloud.gcp_secret_manager:
+            name: "ca-aerospike-com-pem"
+            state: present
+            project: "{{ project_id }}"
+            auth_kind: "application"
+          delegate_to: localhost
+          run_once: true
+          become: no
+          register: ca_aerospike_com_pem
+
+        - name: "Copy TLS Root CA"
+          copy:
+            dest: "{{ aerospike.certs_dir }}/ca.aerospike.com.pem"
+            content: "{{ ca_aerospike_com_pem.value }}"
+            mode: "0644"
+            owner: "root"
+            group: "root"
+      when: security_type in ["TLS", "mTLS"]
+
+    - name: "Install ASDB"
+      shell:
+        cmd: "echo N | ./asinstall"
+        chdir: "/tmp/{{ download_file | splitext | first }}"
+
+#    - name: "Upload aerospike.conf from localhost"
+#      copy:
+#        src: "{{ playbook_dir }}/assets/aerospike.conf"
+#        dest: "/etc/aerospike/aerospike.conf"
+#        owner: root
+#        group: root
+#        mode: "0644"
+#      when: aerospike_conf.stat.exists
+
+    - name: "Executing Following Tasks only if aerospike.conf is not found on localhost"
+      block:
+        - name: "Generate ASDB aerospike.yaml"
+          template:
+            src: "{{ playbook_dir }}/assets/aerospike.yaml.j2"
+            dest: "/etc/aerospike/aerospike.yaml"
+            mode: "0644"
+            owner: root
+            group: root
+
+        - name: "Convert aerospike.yaml to aerospike.conf"
+          shell:
+            cmd: "asconfig convert --aerospike-version {{ version }} aerospike.yaml --output aerospike.conf"
+            chdir: "/etc/aerospike"
+#          when: not aerospike_conf.stat.exists
+
+    - name: "Create and update override.conf for aerospike"
+      copy:
+        dest: "/etc/systemd/system/aerospike.service.d/override.conf"
+        content: |
+          [Service]
+          LimitNOFILE={{ aerospike.proto_fd_max }}
+        mode: "0644"
+
+    - name: "Start ASDB"
+      service:
+        name: aerospike
+        state: started
+      register: service_result
+      until: service_result.status.ActiveState == "active"
+      retries: 5
+      delay: 60
+
+    - name: "Pinning ASDB on Certain vCPUs"
+      command: taskset -c 0-4 /usr/bin/asd --config-file /etc/aerospike/aerospike.conf
+
+    - name: "Create ASDB User"
+      command: >-
+        {% if security_type == 'clear-text' %}
+        asadm -h "127.0.0.1:{{ aerospike.service_port }}" -U admin -P admin -e "enable; manage acl create user tester password psw roles truncate sindex-admin user-admin data-admin read-write read write read-write-udf sys-admin udf-admin"
+        {% elif security_type == 'TLS' %}
+        asadm -h "127.0.0.1:{{ aerospike.tls_name }}:{{ aerospike.service_port_tls }}" -U admin -P admin --tls-enable --tls-cafile="{{ aerospike.certs_dir }}/ca.aerospike.com.pem" -e "enable; manage acl create user tester password psw roles truncate sindex-admin user-admin data-admin read-write read write read-write-udf sys-admin udf-admin"
+        {% elif security_type == 'mTLS' %}
+        echo "Not implemented"
+        {% endif %}
+      run_once: true
+      register: create_user_result
+      failed_when: >
+        create_user_result.rc != 0 and
+        ('User already exists' not in create_user_result.stderr)
+      retries: 30
+      delay: 120
+
+    - name: "Enable Roster"
+      shell: |
+        asdb_namespaces="{{ namespaces | int }}"
+
+        for ((i=1; i<=asdb_namespaces; i++)); do
+          namespace="source-ns$i"
+          echo "Processing namespace: $namespace"
+          
+          {% if security_type == 'clear-text' %}
+          cmd="asinfo -U tester -P psw -h 127.0.0.1 -p {{ aerospike.service_port }}"
+          {% elif security_type == 'TLS' %}
+          cmd="asinfo -U tester -P psw \
+          -h \"127.0.0.1:{{ aerospike.tls_name }}:{{ aerospike.service_port_tls }}\" \
+          --tls-enable \
+          --tls-cafile \"{{ ca_aerospike_com_pem_path }}\""
+          {% elif security_type == 'mTLS' %}
+          echo "Not implemented"
+          exit 1
+          {% endif %}
+          
+          echo "$cmd -v roster:namespace=$namespace | awk -F '[:=]' '{for(i=1;i<=NF;i++) if(\$i=="observed_nodes") print \$(i+1)}'"
+
+          echo "Checking observed nodes for $namespace"
+          observed_nodes=$(eval "$cmd -v roster:namespace=$namespace" \
+          | awk -F '[:=]' '{for(i=1;i<=NF;i++) if($i=="observed_nodes") print $(i+1)}')
+
+          if [[ -z "$observed_nodes" || "$observed_nodes" == "null" ]]; then
+            echo "No observed nodes for namespace: $namespace"
+            continue
+          fi
+
+          echo "Setting roster for $namespace with nodes: $observed_nodes"
+          eval "$cmd -v roster-set:namespace=$namespace;nodes=$observed_nodes"
+
+          echo "Checking pending roster for $namespace"
+          pending_roster=$(eval "$cmd -v roster:namespace=$namespace" \
+          | awk -F '[:=]' '{for(i=1;i<=NF;i++) if($i=="pending_roster") print $(i+1)}')
+
+          if [[ -z "$pending_roster" || "$pending_roster" == "null" ]]; then
+            echo "No pending nodes for namespace: $namespace"
+            continue
+          fi
+
+          echo "Initiating recluster for $namespace"
+          eval "$cmd -v recluster:namespace=$namespace"
+
+          echo "Checking final roster for $namespace"
+          roster=$(eval "$cmd -v roster:namespace=$namespace" \
+          | awk -F '[:=]' '{for(i=1;i<=NF;i++) if($i=="roster") print $(i+1)}')
+
+          if [[ -z "$roster" || "$roster" == "null" ]]; then
+            echo "No roster nodes for namespace: $namespace"
+            continue
+          fi
+
+          echo "Final roster for $namespace: $roster"
+        done
+      args:
+        executable: /bin/bash
+      run_once: true
+      when: roster | bool
+      register: roster_output
+
+    - name: "Display Roster Script Output"
+      debug:
+        msg: "{{ roster_output.stdout_lines }}"
+      run_once: true
+      register: roster_output
+      when: roster | bool

@@ -1,0 +1,67 @@
+def adrScriptPath = "/devops/run_tests/adr/AdrScript.groovy"
+def adrScript
+
+pipeline{
+    agent {
+        label "${params.jenkins_slave}"
+    }
+    parameters{
+        booleanParam(name: 'install_environment', defaultValue: false)
+        booleanParam(name: 'run_tests', defaultValue: false)
+        booleanParam(name: 'uninstall_environment', defaultValue: false)
+        booleanParam(name: 'dynamic_xdr_mode', defaultValue: false)
+        string(name: 'enterprise_backup_branch', defaultValue: 'main', description: 'The enterprise-backup branch you want the installation to run from')
+        choice(name: 'jfrog_repository_stage', description: 'Set the repository stage you want to pull from', choices: ['dev', 'stage', 'prod'])
+        choice(name: 'asbench_duration_seconds', description: 'How much time the asbench will run. 40-about 1M objects will be created. 400-about 10M objects', choices: ['5', '200'])
+        string(name: 'adr_version', defaultValue: 'latest', description: 'Replace the tag of the Jfrog-ADR images')
+        choice(name: 'number_of_nodes', description: 'How many test classes to run in parallel', choices: ['3', '4', '5'])
+        choice(name: 'jvm_suspend', description: 'JVM Suspend For Remote Debug', choices: ['n', 'y'])
+        choice(name: 'parallel_classes', description: 'How many test classes to run in parallel', choices: ['30'])
+        choice(name: 'jenkins_slave', description: 'The slave that the job will run on', choices: ['testAWS1', 'testAWS2', 'testAWS3'])
+        choice(name: 'aws_env_workspace', description: 'The AWS environment workspace the tests should run on', choices: ['test', 'david'])
+        booleanParam(name: 'tls_enabled', defaultValue: false)
+    }
+    options {
+        timeout(time: 3, unit: 'HOURS')
+        buildDiscarder(logRotator(numToKeepStr: '10', daysToKeepStr: '30'))
+    }
+
+    stages {
+        stage('Install AWS Environment') {
+            when {
+                expression { return params.install_environment }
+            }
+            steps {
+                script {
+                    adrScript = load pwd() + adrScriptPath
+                    def numberOfNodes = params.number_of_nodes
+                    adrScript.installAws(numberOfNodes)
+                }
+            }
+        }
+
+        stage('Run Backup tests') {
+            when {
+                expression { return params.run_tests }
+            }
+            steps {
+                script{
+                    adrScript = load pwd() + adrScriptPath
+                    adrScript.runMvnIntegrationTestAWS("ADR-STRESS-TEST", asbench_duration_seconds)
+                }
+            }
+        }
+
+        stage('Uninstall AWS Environment') {
+            when {
+                expression { return params.uninstall_environment }
+            }
+            steps {
+                script {
+                    adrScript = load pwd() + adrScriptPath
+                    adrScript.uninstallAws()
+                }
+            }
+        }
+    }
+}

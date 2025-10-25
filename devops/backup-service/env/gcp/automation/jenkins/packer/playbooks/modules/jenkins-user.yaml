@@ -1,0 +1,15 @@
+- name: Create Jenkins user and group
+  block:
+    - name: Create Jenkins group
+      group:
+        name: jenkins
+        state: present
+
+    - name: Create Jenkins user with specific home and shell
+      user:
+        name: jenkins
+        group: jenkins
+        home: /home/jenkins
+        shell: /bin/bash
+        createhome: yes
+        state: present

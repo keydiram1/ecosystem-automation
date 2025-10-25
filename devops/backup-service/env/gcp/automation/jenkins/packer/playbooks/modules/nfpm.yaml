@@ -1,0 +1,23 @@
+- name: Install nfpm
+  block:
+    - name: Get nfpm latest release version
+      uri:
+        url: https://api.github.com/repos/goreleaser/nfpm/releases/latest
+        return_content: yes
+      register: github_nfpm_response
+
+    - name: Download nfpm .deb package
+      get_url:
+        url: "{{ github_nfpm_response.json.assets | selectattr('name', 'match', '.*\\.deb$') | map(attribute='browser_download_url') | first }}"
+        owner: root
+        group: root
+        dest: /tmp/nfpm.deb
+
+    - name: Install nfpm from .deb package
+      apt:
+        deb: /tmp/nfpm.deb
+
+    - name: Remove nfpm .deb package
+      file:
+        path: /tmp/nfpm.deb
+        state: absent

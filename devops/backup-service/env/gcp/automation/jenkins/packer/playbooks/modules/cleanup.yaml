@@ -1,0 +1,6 @@
+- name: Make Cleanup
+  block:
+    - name: Cleanups
+      apt:
+        autoclean: yes
+        autoremove: yes

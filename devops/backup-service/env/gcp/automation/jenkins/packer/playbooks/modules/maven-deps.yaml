@@ -1,0 +1,49 @@
+- name: Download Maven Dependencies
+  block:
+    - name: Git Clone Ecosystem Automation Project
+      git:
+        repo: "https://{{ github_token }}@github.com/citrusleaf/ecosystem-automation.git"
+        dest: "{{ ansible_env.HOME }}/ecosystem-automation"
+        clone: yes
+        update: no
+        force: yes
+
+    - name: Initialize Sparse Checkout, Fetch Relevant Project Files, and Cache Maven Dependencies
+      shell: |
+        M2_HOME=/opt/maven/apache-maven-latest
+        MAVEN_HOME=/opt/maven/apache-maven-latest
+        PATH=/opt/maven/apache-maven-latest/bin:$PATH
+        git sparse-checkout init --cone --sparse-index
+        git sparse-checkout set --skip-checks 'pom.xml' 'spring-data-tests/pom.xml' 'backup-tests/pom.xml'
+        git checkout master
+        mvn dependency:go-offline
+      args:
+        chdir: "{{ ansible_env.HOME }}/ecosystem-automation"
+        executable: /bin/bash
+
+    - name: Create .m2 folder for Jenkins user
+      file:
+        path: /home/jenkins/.m2
+        state: directory
+        mode: '0755'
+        owner: jenkins
+        group: jenkins
+
+    - name: Copy Downloaded dependencies under Jenkins user
+      copy:
+        src: "{{ ansible_env.HOME }}/.m2/repository"
+        dest: /home/jenkins/.m2/repository
+        remote_src: yes
+        mode: '0755'
+        owner: jenkins
+        group: jenkins
+
+    - name: Delete .m2 folder
+      file:
+        path: "{{ ansible_env.HOME }}/.m2"
+        state: absent
+
+    - name: Delete ecosystem-automation project folder
+      file:
+        path: "{{ ansible_env.HOME }}/ecosystem-automation"
+        state: absent

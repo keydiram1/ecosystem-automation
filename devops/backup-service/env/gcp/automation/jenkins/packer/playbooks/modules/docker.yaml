@@ -1,0 +1,74 @@
+- name: Install Docker
+  block:
+    - name: Add Docker PPA repository
+      deb822_repository:
+        name: docker
+        types: deb
+        uris: https://download.docker.com/linux/ubuntu
+        suites: "{{ ansible_distribution_release }}"
+        components: stable
+        architectures: "{{ architecture_map[ansible_architecture] }}"
+        enabled: yes
+        signed_by: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Install Docker Dependencies
+      apt:
+        update_cache: yes
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+
+    - name: Check if jenkins user exists
+      getent:
+        database: passwd
+        key: jenkins
+      register: jenkins_user
+      failed_when: false
+
+    - name: Check if ubuntu user exists
+      getent:
+        database: passwd
+        key: ubuntu
+      register: ubuntu_user
+      failed_when: false
+
+    - name: Add jenkins user to docker and sudo groups
+      user:
+        name: jenkins
+        groups:
+          - sudo
+          - docker
+        append: yes
+      when: jenkins_user is defined
+
+    - name: Add ubuntu user to docker and sudo groups
+      user:
+        name: ubuntu
+        groups:
+          - sudo
+          - docker
+        append: yes
+      when: ubuntu_user is defined
+
+    - name: Ensure bash-completion directory exists
+      file:
+        path: /etc/bash_completion.d
+        state: directory
+        mode: '0755'
+
+    - name: Generate Docker bash completion script
+      command: docker completion bash
+      register: docker_completion_script
+
+    - name: Install Docker completion script for all users
+      copy:
+        dest: /etc/bash_completion.d/docker
+        content: "{{ docker_completion_script.stdout }}"
+        owner: root
+        group: root
+        mode: '0644'

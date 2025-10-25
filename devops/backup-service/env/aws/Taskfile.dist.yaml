@@ -1,0 +1,56 @@
+version: '3'
+tasks:
+  plan:
+    cmds:
+      - terragrunt run-all plan
+  apply:
+    cmds:
+      - terragrunt run-all apply --terragrunt-non-interactive
+  destroy:
+    cmds:
+      - terragrunt run-all destroy --terragrunt-non-interactive
+  destroy:service:
+    cmds:
+      - terragrunt --terragrunt-working-dir {{.ROOT_DIR}}/live/k8s/backup-service destroy --terragrunt-non-interactive
+  clean:
+    cmds:
+      - find . -type d -name ".terragrunt-cache" -prune -exec rm -rf {} \;
+      - find . -maxdepth 1  -type f \( -name "*.pem" -o -name "*.jks" \) -exec rm -f {} \;
+  set:workspace:
+    cmds:
+      - yq eval '.workspace = "{{.CLI_ARGS}}"' common_vars.yaml -i
+  set:service_version:
+    cmds:
+      - yq eval '.k8s.aerospike.backup_service.version = "{{.CLI_ARGS}}"' common_vars.yaml -i
+  set:cluster:size:
+    cmds:
+      - yq eval '.aerospike.size = "{{.CLI_ARGS}}"' common_vars.yaml -i
+  output:gateway_dns_name:
+    cmds:
+      - terragrunt --terragrunt-working-dir {{.ROOT_DIR}}/live/k8s/backup-service output --terragrunt-log-level panic -raw gateway_dns_name
+  output:ingress_hostname:
+    cmds:
+      - terragrunt --terragrunt-working-dir {{.ROOT_DIR}}/live/k8s/aerospike output --terragrunt-log-level panic -raw hostname
+  output:cluster_instance_ids:
+    cmds:
+      - terragrunt --terragrunt-working-dir {{.ROOT_DIR}}/live/aerospike-cluster output --terragrunt-log-level panic -json "instance_ids" 2>/dev/null
+  output:cluster_public_ips:
+    cmds:
+      - terragrunt --terragrunt-working-dir {{.ROOT_DIR}}/live/aerospike-cluster output --terragrunt-log-level panic -json "public_ips" 2>/dev/null
+  output:cluster_ssh_key:
+    cmds:
+      - terragrunt --terragrunt-working-dir {{.ROOT_DIR}}/live/aerospike-cluster output --terragrunt-log-level panic -raw cluster_ssh_key 2>/dev/null
+  output:root_ca_pem:
+    cmds:
+      - aws secretsmanager get-secret-value --secret-id testenv --query SecretString --output text | jq -r .rootCA_pem | base64 --decode
+  output:root_ca_pem:jks:
+    cmds:
+      - find . -maxdepth 1  -type f \( -name "rootCA.pem" -o -name "root.ca.jks" \) -exec rm -f {} \;
+      - task output:root_ca_pem > rootCA.pem
+      - keytool -importcert -trustcacerts -noprompt -storetype jks -keystore root.ca.jks -file rootCA.pem -storepass "rootca"
+  cluster:ssh:
+    cmds:
+      - find . -maxdepth 1  -type f -name "rootCA.pem" -exec rm -f {} \;
+      - task output:root_ca_pem > rootCA.pem
+      - chmod 400 rootCA.pem
+      - ssh -i rootCA.pem "ec2-user@$(task output:cluster_public_ips | jq -r '.[0]')"

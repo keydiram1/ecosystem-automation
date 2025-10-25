@@ -1,0 +1,43 @@
+def parameters_to_send = [booleanParam(name: 'reinstall_adr', value: params.'reinstall_adr'),
+                          booleanParam(name: 'static_configuration', value: params.'static_configuration'),
+                          booleanParam(name: 'multinode_source', value: params.'multinode_source'),
+                          string(name: 'asdb_version', value: params.'asdb_version'),
+                          string(name: 'aerospike_backup_image_version', value: params.'aerospike_backup_image_version'),
+                          string(name: 'parallel_classes', value: params.'parallel_classes'),
+                          string(name: 'adr_image_version', value: params.'adr_image_version'),
+                          booleanParam(name: 'install_from_enterprise_backup_project', value: params.'install_from_enterprise_backup_project'),
+                          string(name: 'enterprise_backup_branch', value: params.'enterprise_backup_branch'),
+                          booleanParam(name: 'tls_enabled', value: params.'tls_enabled')]
+
+pipeline {
+    agent none
+    parameters {
+        choice(name: 'RUN_COUNT', choices: ['3', '5', '10', '15'], description: 'Enter the number of times to run the job:')
+        string(name: 'JOB_NAME', defaultValue: 'test-adr-local/master', description: 'Enter the name of the Jenkins job to run:')
+
+        booleanParam(name: 'reinstall_adr', defaultValue: true)
+        booleanParam(name: 'static_configuration', defaultValue: true)
+        booleanParam(name: 'multinode_source', description: 'Multinode source cluster')
+        choice(name: 'parallel_classes', description: 'How many test classes to run in parallel', choices: ['15', '1', '2', '3', '10', '5'])
+        choice(name: 'asdb_version', description: 'Set the version of the Aerospike images', choices: ['5.7.0.31', 'latest', '6.1.0.19', '6.4.0.1'])
+        choice(name: 'aerospike_backup_image_version', description: 'Set the version of the Aerospike images', choices: ['6.4.0.1', '6.1.0.19', 'latest'])
+        string(name: 'adr_image_version', defaultValue: 'latest', description: 'Replace the tag of the Jfrog-ADR images')
+        booleanParam(name: 'install_from_enterprise_backup_project', defaultValue: true, description: 'Images will be created from the entersprise-backup project')
+        string(name: 'enterprise_backup_branch', defaultValue: 'main', description: 'The enterprise-backup branch you want to install from. Will be used only when install_from_enterprise_backup_project=true')
+        booleanParam(name: 'tls_enabled', defaultValue: false)
+    }
+    stages {
+        stage('Run Job Multiple Times') {
+            steps {
+                script {
+                    def runCount = params.RUN_COUNT.toInteger()
+                    def jobName = params.JOB_NAME
+                    for (int i = 1; i <= runCount; i++) {
+                        echo "Running ${jobName} - Execution ${i}"
+                        build job: jobName, parameters: parameters_to_send, propagate: false
+                    }
+                }
+            }
+        }
+    }
+}

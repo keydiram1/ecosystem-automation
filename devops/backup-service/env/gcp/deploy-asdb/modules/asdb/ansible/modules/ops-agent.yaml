@@ -1,0 +1,23 @@
+- block:
+    - name: Download add-google-cloud-ops-agent-repo.sh script
+      get_url:
+        url: https://dl.google.com/cloudagents/add-google-cloud-ops-agent-repo.sh
+        dest: /tmp/add-google-cloud-ops-agent-repo.sh
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Install Google Cloud Ops Agent
+      command:
+        cmd: /tmp/add-google-cloud-ops-agent-repo.sh --also-install
+
+    - name: Enable and Start Google Cloud Ops Agent Service
+      systemd_service:
+        name: google-cloud-ops-agent
+        enabled: true
+        state: started
+
+    - name: Remove downloaded script
+      file:
+        path: /tmp/add-google-cloud-ops-agent-repo.sh
+        state: absent

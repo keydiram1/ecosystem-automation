@@ -1,0 +1,79 @@
+- name: Destroy Image Builders
+  hosts: localhost
+  gather_facts: yes
+  vars_files:
+    - vars.yaml
+  tasks:
+    - name: Check if docker builder exists
+      shell: docker buildx ls | grep -q "{{ docker_builder_name }}"
+      ignore_errors: yes
+      register: command_output
+    - name: Switch to default builder
+      block:
+        - name: Try switching to default builder
+          command: docker buildx use default
+      rescue:
+        - name: Try another command
+          command: docker context use default
+      when: command_output.rc == 0
+    - name: Remove docker buildx builder
+      command: docker buildx rm "{{ docker_builder_name }}"
+      ignore_errors: yes
+      when: command_output.rc == 0
+    - name: Check for existing Amd64 VM
+      gcp_compute_instance_info:
+        project: "{{ gcp_project_id }}"
+        auth_kind: "{{ gcp_auth_kind }}"
+        zone: "{{ gcp_zone }}"
+        filters:
+          - name = "{{ gcp_vm_name_amd64 }}"
+      register: instance_info_amd64
+
+    - block:
+      - name: Delete GCP Amd64 VM
+        gcp_compute_instance:
+          name: "{{ gcp_vm_name_amd64 }}"
+          project: "{{ gcp_project_id }}"
+          auth_kind: "{{ gcp_auth_kind }}"
+          zone: "{{ gcp_zone }}"
+          state: absent
+        register: instance_amd64
+      - name: Remove Amd64 VM instance from known hosts
+        known_hosts:
+          name: "{{ instance_info_amd64.resources[0].networkInterfaces[0].accessConfigs[0].natIP }}"
+          hash_host: true
+          state: absent
+      when: instance_info_amd64.resources | length > 0
+
+    - name: Check for existing Arm64 VM
+      gcp_compute_instance_info:
+        project: "{{ gcp_project_id }}"
+        auth_kind: "{{ gcp_auth_kind }}"
+        zone: "{{ gcp_zone }}"
+        filters:
+          - name = "{{ gcp_vm_name_arm64 }}"
+      register: instance_info_arm64
+    - block:
+      - name: Delete GCP Arm64 VM
+        gcp_compute_instance:
+          name: "{{ gcp_vm_name_arm64 }}"
+          project: "{{ gcp_project_id }}"
+          auth_kind: "{{ gcp_auth_kind }}"
+          zone: "{{ gcp_zone }}"
+          state: absent
+        register: instance_arm64
+      - name: Remove Arm64 VM instance from known hosts
+        known_hosts:
+          name: "{{ instance_info_arm64.resources[0].networkInterfaces[0].accessConfigs[0].natIP }}"
+          hash_host: true
+          state: absent
+      when: instance_info_arm64.resources | length > 0
+
+    - name: Remove SSH Private Key
+      file:
+        path: "{{ playbook_dir }}/id_rsa"
+        state: absent
+    - name: Remove SSH Public Key
+      file:
+        path: "{{ playbook_dir }}/id_rsa.pub"
+        state: absent

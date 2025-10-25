@@ -1,0 +1,32 @@
+- name: Install Gcloud CLI
+  block:
+    - name: Add Google Cloud SDK apt repository
+      deb822_repository:
+        name: google-cloud-sdk
+        types: deb
+        uris: https://packages.cloud.google.com/apt
+        suites: cloud-sdk
+        components: main
+        architectures: "{{ architecture_map[ansible_architecture] }}"
+        enabled: yes
+        signed_by: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+        state: present
+
+    - name: Install Gcloud CLI
+      apt:
+        update_cache: yes
+        name:
+          - google-cloud-cli
+          - google-cloud-sdk-gke-gcloud-auth-plugin
+        state: present
+
+    - name: Update environment variables for Gcloud CLI
+      lineinfile:
+        path: /etc/profile.d/gcloud.sh
+        create: yes
+        line: "export CLOUDSDK_PYTHON={{ python_venv_location }}/python"
+
+    - name: Make Gcloud environment script executable
+      file:
+        path: /etc/profile.d/gcloud.sh
+        mode: '0755'

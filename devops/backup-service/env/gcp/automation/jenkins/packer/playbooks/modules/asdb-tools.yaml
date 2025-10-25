@@ -1,0 +1,41 @@
+- name: Install Aerospike Tools
+  block:
+    - name: Get Aerospike Tools latest version
+      set_fact:
+        aerospike_tools_latest_version: "{{ lookup('ansible.builtin.url', 'https://download.aerospike.com/artifacts/aerospike-tools/', split_lines=False) 
+              | regex_findall('([0-9]+\\.[0-9]+\\.[0-9]+|[0-9]+\\.[0-9]+)') 
+              | map('split', '.') 
+              | map('map', 'int') 
+              | list 
+              | sort(reverse=True) 
+              | map('join', '.') 
+              | first }}"
+
+    - name: Download Aerospike Tools .tar.gz package
+      get_url:
+        url: "https://download.aerospike.com/artifacts/aerospike-tools/{{ aerospike_tools_latest_version }}/aerospike-tools_{{ aerospike_tools_latest_version }}_{{ os_map[ansible_distribution ~ '-' ~ ansible_distribution_version.split('.')[0]] }}_{{ ansible_architecture }}.tgz"
+        dest: "/tmp/aerospike-tools_{{ aerospike_tools_latest_version }}_{{ os_map[ansible_distribution ~ '-' ~ ansible_distribution_version.split('.')[0]] }}_{{ ansible_architecture }}.tgz"
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Extract Aerospike Tools .tar.gz package
+      unarchive:
+        src: "/tmp/aerospike-tools_{{ aerospike_tools_latest_version }}_{{ os_map[ansible_distribution ~ '-' ~ ansible_distribution_version.split('.')[0]] }}_{{ ansible_architecture }}.tgz"
+        dest: /tmp
+        remote_src: yes
+
+    - name: Install Aerospike Tools .deb package
+      apt:
+        deb: "/tmp/aerospike-tools_{{ aerospike_tools_latest_version }}_{{ os_map[ansible_distribution ~ '-' ~ ansible_distribution_version.split('.')[0]] }}_{{ ansible_architecture }}/aerospike-tools_{{ aerospike_tools_latest_version }}-{{ os_map[ansible_distribution ~ '-' ~ ansible_distribution_version.split('.')[0]] }}_{{ architecture_map[ansible_architecture] }}.deb"
+        state: present
+
+    - name: Remove the downloaded .tar.gz file
+      file:
+        path: "/tmp/aerospike-tools_{{ aerospike_tools_latest_version }}_{{ os_map[ansible_distribution ~ '-' ~ ansible_distribution_version.split('.')[0]] }}_{{ ansible_architecture }}.tgz"
+        state: absent
+
+    - name: Remove the extracted folder
+      file:
+        path: "/tmp/aerospike-tools_{{ aerospike_tools_latest_version }}_{{ os_map[ansible_distribution ~ '-' ~ ansible_distribution_version.split('.')[0]] }}_{{ ansible_architecture }}"
+        state: absent

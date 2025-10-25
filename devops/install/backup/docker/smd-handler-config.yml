@@ -1,0 +1,11 @@
+---
+backendUri: 'http://rest-backend:8080'
+storageProviderUri: 'http://storage-provider:8081'
+backupIntervalSeconds: 5
+backupTruncatesSeconds: 6
+authenticatorUri: 'http://authenticator:8087'
+auth:
+  enabled: true
+  tokenRefreshSeconds: 82800
+  username: "adr-smd-handler"
+  password: "adr-smd-handler-pwd"

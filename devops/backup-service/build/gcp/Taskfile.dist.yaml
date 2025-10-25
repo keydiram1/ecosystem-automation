@@ -1,0 +1,11 @@
+version: '3'
+tasks:
+  create-builder:
+    cmds:
+      - cd {{.ROOT_DIR}}/ansible && ansible-playbook -i inventory/gcp_compute.yaml create-builder.yaml
+  destroy-builder:
+    cmds:
+      - cd {{.ROOT_DIR}}/ansible && ansible-playbook -i inventory/gcp_compute.yaml destroy-builder.yaml
+  build-image:
+    cmds:
+      - DOCKER_USERNAME="${DOCKER_USERNAME}" DOCKER_PASSWORD="${DOCKER_PASSWORD}" ./build.sh --channels dev --group default --tag "${TAG}" --tag-latest "${LATEST}" --branch "${BRANCH}"

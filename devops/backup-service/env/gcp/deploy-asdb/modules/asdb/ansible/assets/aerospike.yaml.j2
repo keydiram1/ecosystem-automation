@@ -1,0 +1,149 @@
+{#- Define commonly used variables at the top for better maintainability -#}
+{%- set is_tls_enabled = security_type in ["TLS", "mTLS"] -%}
+{%- set is_mtls = security_type == "mTLS" -%}
+{%- set is_secret_agent = secret_agent | bool -%}
+{%- set is_strong_consistency = strong_consistency | bool -%}
+{%- set namespace_count = namespaces | int -%}
+{%- set is_raw_device = device_type == "raw" -%}
+{%- set is_legacy_version = asdb_version is version('7.0.0.0', operator='lt') -%}
+{%- set is_pre_v7_1 = asdb_version is version('7.1.0.0', operator='lt') -%}
+
+service:
+  user: root
+  group: root
+  node-id: "{{ node_number }}"
+  proto-fd-max: {{ aerospike.proto_fd_max }}
+  cluster-name: asd.aerospike.com
+{% if is_secret_agent %}
+  secrets-address-port: "{{ secret_agent_address }} {{ aerospike.secret_agent_port }}"
+  feature-key-file: secrets:featuresConf:features-conf
+{% else %}
+  feature-key-file: {{ aerospike.config_dir }}/features.conf
+{% endif %}
+  query-threads-limit: 1024
+
+security: {}
+
+logging:
+  - aggr: info
+    name: /var/log/aerospike/udf.log
+    udf: info
+  - any: info
+    name: /var/log/aerospike/aerospike.log
+
+network:
+{% if is_tls_enabled %}
+  tls:
+    - name: {{ aerospike.tls_name }}
+{% if is_secret_agent %}
+      cert-file: secrets:asdCert:asd-aerospike-com-pem
+      key-file: secrets:asdKey:asd-aerospike-com-key
+{% else %}
+      cert-file: {{ aerospike.certs_dir }}asd.aerospike.com.pem
+      key-file: {{ aerospike.certs_dir }}asd.aerospike.com.key
+{% endif %}
+      ca-file: {{ aerospike.certs_dir }}ca.aerospike.com.pem
+{% endif %}
+
+  service:
+{% if security_type == "clear-text" %}
+{% if is_legacy_version %}
+    address:
+      - any
+{% endif %}
+    port: {{ aerospike.service_port }}
+{% endif %}
+{% if is_tls_enabled and section_selection[0] %}
+    tls-addresses:
+      - any
+    tls-port: {{ aerospike.service_port_tls }}
+    tls-name: {{ aerospike.tls_name }}
+{% if security_type == "TLS" %}
+    tls-authenticate-client: false
+{% elif is_mtls %}
+    tls-authenticate-client: any
+{% endif %}
+{% endif %}
+
+  heartbeat:
+    mode: mesh
+    interval: 150
+    timeout: 10
+{% if is_tls_enabled and section_selection[1] %}
+    tls-port: {{ aerospike.heartbeat_port_tls }}
+    tls-name: {{ aerospike.tls_name }}
+    tls-mesh-seed-address-port:
+{% for ip_address in cluster_ip_addresses %}
+      - {{ ip_address }} {{ aerospike.heartbeat_port_tls }}
+{% endfor %}
+{% else %}
+    port: {{ aerospike.heartbeat_port }}
+    mesh-seed-address-ports:
+{% for ip_address in cluster_ip_addresses %}
+      - {{ ip_address }} {{ aerospike.heartbeat_port }}
+{% endfor %}
+{% endif %}
+
+  fabric:
+    addresses:
+      - any
+{% if is_tls_enabled and section_selection[2] %}
+    tls-name: {{ aerospike.tls_name }}
+    tls-port: {{ aerospike.fabric_port_tls }}
+{% else %}
+    port: {{ aerospike.fabric_port }}
+{% endif %}
+
+  info:
+    port: {{ aerospike.info_port }}
+
+namespaces:
+{% for i in range(namespace_count) %}
+{% set ns_name = "source-ns" ~ (i + 1) %}
+{% set is_special_ns = (i + 1) == 7 %}
+  - name: {{ ns_name }}
+    single-query-threads: {{ single_query_threads }}
+    replication-factor: 2
+    default-ttl: 2592000
+    nsup-period: 120
+{% if is_special_ns %}
+    max-record-size: 8388608
+{% endif %}
+{% if is_strong_consistency %}
+    strong-consistency: true
+    strong-consistency-allow-expunge: true
+{% endif %}
+    storage-engine:
+{% if encryption_at_rest %}
+      encryption: aes-256
+{% if is_secret_agent %}
+      encryption-key-file: secrets:encKey:encryption-key-pem
+{% else %}
+      encryption-key-file: {{ aerospike.config_dir }}/encryption.aes-256.key.pem
+{% endif %}
+{% endif %}
+      type: device
+{% if is_raw_device %}
+      devices:
+{% if device_shadow %}
+{% for j in range(i, nvme_devices.files | length, namespace_count) %}
+        - {{ nvme_devices.files[j].path }} {{ nvme_shadow_devices.files[j].path }}
+{% endfor %}
+{% else %}
+{% for j in range(i, nvme_devices.files | length, namespace_count) %}
+        - {{ nvme_devices.files[j].path }}
+{% endfor %}
+{% endif %}
+{% else %}
+      files:
+        - {{ aerospike.mount_path }}/data-0/{{ ns_name }}.dat
+      filesize: 4294967296
+{% if is_special_ns %}
+{% if is_pre_v7_1 %}
+      write-block-size: 8388608
+{% else %}
+      flush-size: 8388608
+{% endif %}
+{% endif %}
+{% endif %}
+{% endfor %}

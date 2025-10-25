@@ -1,0 +1,36 @@
+is_jenkins: false
+
+
+kind:
+  cluster_name: "abs-cluster"
+  cluster_context: "kind-abs-cluster"
+
+gcp:
+  project_id: "ecosystem-connectors-data"
+  project_number: "653670761165"
+  region: "me-west1"
+
+aerospike:
+  version: "7.2.0.6"
+  size: 1
+  namespaces: 30
+  tls_name: asd.aerospike.com
+  tls_enabled: False
+  roster_enabled: False
+  sc_enabled: False
+  replication_factor: 2
+  username: tester
+  password: psw
+  secret_path:
+    asd_cert: "projects/{{ gcp.project_number }}/secrets/asd-aerospike-com-pem/versions/latest"
+    asd_key: "projects/{{ gcp.project_number }}/secrets/asd-aerospike-com-key/versions/latest"
+    ca_cert: "projects/{{ gcp.project_number }}/secrets/ca-aerospike-com-pem/versions/latest"
+    enc_key: "projects/{{ gcp.project_number }}/secrets/encryption-key-pem/versions/latest"
+    asd_psw: "projects/{{ gcp.project_number }}/secrets/password-txt/versions/latest"
+    features_conf: "projects/{{ gcp.project_number }}/secrets/features-conf/versions/latest"
+    aws_access_key: "projects/{{ gcp.project_number }}/secrets/aws-access-key-id/versions/latest"
+    aws_secret_access_key: "projects/{{ gcp.project_number }}/secrets/aws-secret-access-key/versions/latest"
+    azure_client_id:  "projects/{{ gcp.project_number }}/secrets/azure-client-id/versions/latest"
+    azure_client_secret: "projects/{{ gcp.project_number }}/secrets/azure-client-secret/versions/latest"
+    azure_tenant_id: "projects/{{ gcp.project_number }}/secrets/azure-tenant-id/versions/latest"
+    gcp_sa_key_file: "projects/{{ gcp.project_number }}/secrets/gcp-sa-key-file/versions/latest"

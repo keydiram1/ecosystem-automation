@@ -1,0 +1,34 @@
+/bin/
+/target/
+/build/
+.classpath
+.settings
+.project
+.metadata
+.DS_Store
+.idea
+
+### Python ###
+*.iml
+.venv
+
+
+### Terraform ###
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+*.terraform.lock.hcl
+*.terraform.lock.hcl.*
+
+#/devops
+backup-tests/target/
+spring-data-tests/target/
+#devops/install/cli-backup/backup-go

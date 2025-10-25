@@ -1,0 +1,21 @@
+- name: Install EcoEng Jenkins Artifact Builder Dependencies
+  hosts: all
+  gather_facts: yes
+  become: yes
+
+  vars_files:
+    - "{{ playbook_dir }}/vars/vars.yaml"
+
+  tasks:
+    - include_tasks: "{{ playbook_dir }}/modules/core-tasks.yaml"
+    - include_tasks: "{{ playbook_dir }}/modules/jenkins-user.yaml"
+    - include_tasks: "{{ playbook_dir }}/modules/java.yaml"
+    - include_tasks: "{{ playbook_dir }}/modules/golang.yaml"
+    - include_tasks: "{{ playbook_dir }}/modules/golang-deps.yaml"
+    - include_tasks: "{{ playbook_dir }}/modules/google-ops-agent.yaml"
+    - include_tasks: "{{ playbook_dir }}/modules/docker.yaml"
+    - include_tasks: "{{ playbook_dir }}/modules/jfrog.yaml"
+    - include_tasks: "{{ playbook_dir }}/modules/nfpm.yaml"
+    - include_tasks: "{{ playbook_dir }}/modules/snyk.yaml"
+    - include_tasks: "{{ playbook_dir }}/modules/k8s-tools.yaml"
+    - include_tasks: "{{ playbook_dir }}/modules/cleanup.yaml"
