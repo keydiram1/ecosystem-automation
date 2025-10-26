@@ -32,3 +32,6 @@ terraform.rc
 backup-tests/target/
 spring-data-tests/target/
 #devops/install/cli-backup/backup-go
+# Petstore module
+petstore/target/
+petstore/*.iml
