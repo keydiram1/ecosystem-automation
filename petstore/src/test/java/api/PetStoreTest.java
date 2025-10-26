@@ -10,10 +10,7 @@ import api.petstore.dto.User;
 import api.petstore.utils.PetStoreRunner;
 import api.petstore.utils.PetUtils;
 import org.apache.commons.lang3.RandomStringUtils;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.api.*;
 
 import java.time.Instant;
 import java.util.List;
@@ -21,7 +18,8 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-public class TestPetStore extends PetStoreRunner {
+@Tag("PETSTORE-TEST")
+public class PetStoreTest extends PetStoreRunner {
 
     private PetApi petApi;
     private StoreApi storeApi;
