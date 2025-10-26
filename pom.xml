@@ -10,6 +10,7 @@
     <modules>
         <module>spring-data-tests</module>
         <module>backup-tests</module>
+        <module>petstore</module>
     </modules>
 
     <properties>
