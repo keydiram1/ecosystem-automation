@@ -11,6 +11,7 @@
         <module>spring-data-tests</module>
         <module>backup-tests</module>
         <module>petstore</module>
+        <module>yahoo</module>
     </modules>
 
     <properties>

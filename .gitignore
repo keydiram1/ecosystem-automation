@@ -35,3 +35,7 @@ spring-data-tests/target/
 # Petstore module
 petstore/target/
 petstore/*.iml
+
+# yahoo module
+yahoo/target/
+yahoo/*.iml

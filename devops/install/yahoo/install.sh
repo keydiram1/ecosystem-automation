@@ -2,4 +2,4 @@
 source
 set -e
 
-echo "Install petstore"
+echo "Install yahoo"
