@@ -22,6 +22,8 @@ class YahooTest extends UiRunner {
     void homePageTitle_containsYahoo() {
         searchResultPage = home.search("news");
         searchResultPage.getBackToHomePage();
+        home.openMail();
+
 
     }
 }

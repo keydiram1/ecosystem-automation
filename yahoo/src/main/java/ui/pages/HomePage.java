@@ -24,7 +24,13 @@ public class HomePage {
     }
 
     public MailPage openMail() {
-        webDriver.findElement(By.id("ybarMailLink")).click();
+        SeleniumUtils.clickByXpath("//span[normalize-space(.)='Mail']");
+        SeleniumUtils.switchToTab(2);
+        try {
+            Thread.sleep(3000);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
         return new MailPage(); // MailPage pulls driver from DriverManager
     }
 

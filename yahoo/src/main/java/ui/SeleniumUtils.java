@@ -6,6 +6,7 @@ import org.openqa.selenium.support.ui.WebDriverWait;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -15,7 +16,7 @@ public final class SeleniumUtils {
 
     // ---- configuration ----
     private static Duration defaultTimeout() {
-        long timeoutSeconds = Long.parseLong(System.getProperty("wait.seconds", "10"));
+        long timeoutSeconds = Long.parseLong(System.getProperty("wait.seconds", "30"));
         return Duration.ofSeconds(timeoutSeconds);
     }
 
@@ -105,17 +106,23 @@ public final class SeleniumUtils {
     public static String switchToNewTab() { return switchToNewTab(defaultTimeout()); }
 
     public static String switchToNewTab(Duration timeout) {
-        Set<String> handlesBefore = webDriver().getWindowHandles();
-        new WebDriverWait(webDriver(), timeout)
-                .until(driver -> driver.getWindowHandles().size() > handlesBefore.size());
+        WebDriver d = webDriver();
+        Set<String> before = new HashSet<>(d.getWindowHandles()); // copy!
+
+        new WebDriverWait(d, timeout).until(dr -> {
+            Set<String> now = new HashSet<>(dr.getWindowHandles());
+            now.removeAll(before);
+            return !now.isEmpty();
+        });
+
+        // find the new handle and switch
+        Set<String> now = new HashSet<>(d.getWindowHandles());
+        now.removeAll(before);
+        String newHandle = now.iterator().next();
+
+        d.switchTo().window(newHandle);
         syncTabs();
-        for (String handle : threadLocalTabOrder.get()) {
-            if (!handlesBefore.contains(handle)) {
-                webDriver().switchTo().window(handle);
-                return handle;
-            }
-        }
-        throw new TimeoutException("New tab not detected");
+        return newHandle;
     }
 
     /** Wait until at least N tabs, then switch to the newest. Returns its handle. */
@@ -149,5 +156,22 @@ public final class SeleniumUtils {
         int targetIndex = Math.max(0, currentIndex - 1);
         if (targetIndex >= orderedHandles.size()) targetIndex = orderedHandles.size() - 1;
         webDriver().switchTo().window(orderedHandles.get(targetIndex));
+    }
+
+    // ---- XPath helpers ----
+    public static WebElement waitClickableByXpath(String xpath) {
+        return waitClickable(By.xpath(xpath), defaultTimeout());
+    }
+    public static WebElement waitClickableByXpath(String xpath, Duration timeout) {
+        return waitClickable(By.xpath(xpath), timeout);
+    }
+    public static void clickByXpath(String xpath) {
+        WebElement el = waitClickableByXpath(xpath);
+        try {
+            el.click();
+        } catch (ElementClickInterceptedException | StaleElementReferenceException e) {
+            // JS fallback
+            ((JavascriptExecutor) webDriver()).executeScript("arguments[0].click();", el);
+        }
     }
 }
